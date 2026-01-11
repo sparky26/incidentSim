@@ -21,7 +21,9 @@ export type EventType =
     | 'HANDOVER_STARTED'
     | 'HANDOVER_COMPLETED'
     | 'INCIDENT_STARTED'
-    | 'INCIDENT_RESOLVED';
+    | 'INCIDENT_RESOLVED'
+    | 'SERVICE_HEALTH_CHECK'
+    | 'RECOVERY_CHECK';
 
 export interface SimulationEvent {
     id: string;
@@ -40,6 +42,7 @@ export interface EntityState {
     fatigue?: number; // For humans
     load?: number; // For services
     activeIncidents?: string[]; // AlertRule
+    activeIncidentId?: string; // Service tracking
 
     // Human
     timeActive?: number;

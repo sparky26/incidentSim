@@ -22,7 +22,10 @@ export const ActionBehavior: BlockBehavior = {
 
             if (success) {
                 targets.forEach(t => {
-                    ctx.schedule('SERVICE_RECOVERED', 0, t, { reason: 'action_success' });
+                    ctx.schedule('SERVICE_RECOVERED', 0, t, {
+                        reason: 'action_success',
+                        incidentId: event.data?.incidentId
+                    });
                     // Also clear alerts?
                 });
             } else {
