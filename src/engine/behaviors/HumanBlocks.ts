@@ -52,7 +52,10 @@ export const ResponderBehavior: BlockBehavior = {
             const finalDuration = Math.max(1, responseTime * (0.8 + ctx.random.next() * 0.4));
             state.fatigue = (state.fatigue || 0) + 1;
 
-            ctx.schedule('PAGE_ACKNOWLEDGED', finalDuration, block.id, { alertId: event.data?.alertId });
+            ctx.schedule('PAGE_ACKNOWLEDGED', finalDuration, block.id, {
+                alertId: event.data?.alertId,
+                incidentId: event.data?.incidentId
+            });
         }
         else if (event.type === 'HANDOVER_STARTED') {
             // Context Loss Penalty
@@ -78,14 +81,20 @@ export const ResponderBehavior: BlockBehavior = {
             const alertId = event.data?.alertId;
             if (alertId) {
                 // Re-emit page sent to self to process as new responder
-                ctx.schedule('PAGE_SENT', 0, block.id, { alertId });
+                ctx.schedule('PAGE_SENT', 0, block.id, {
+                    alertId,
+                    incidentId: event.data?.incidentId
+                });
             }
         }
         else if (event.type === 'PAGE_ACKNOWLEDGED') {
             const connectedActions = ctx.getConnections(block.id);
             if (connectedActions.length > 0) {
                 const actionId = connectedActions[Math.floor(ctx.random.next() * connectedActions.length)];
-                ctx.schedule('ACTION_STARTED', 1, actionId, { responderId: block.id });
+                ctx.schedule('ACTION_STARTED', 1, actionId, {
+                    responderId: block.id,
+                    incidentId: event.data?.incidentId
+                });
             }
         }
     }

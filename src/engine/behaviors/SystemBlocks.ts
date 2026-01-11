@@ -4,12 +4,64 @@ import { SimulationEvent } from '../../types/simulation';
 
 export const ServiceBehavior: BlockBehavior = {
     initialize(block: Block, ctx: SimulationContext) {
-        // v1: Passive initialization
+        const config = block.config as ServiceConfig;
+        if (config.baseFailureRate > 0) {
+            ctx.schedule('SERVICE_HEALTH_CHECK', 1, block.id);
+        }
     },
 
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
         const config = block.config as ServiceConfig;
         const state = ctx.state.get(block.id)!;
+
+        const startIncident = (reason: string, incidentId?: string) => {
+            if (state.status === 'down') return;
+            state.status = 'down';
+            const resolvedIncidentId = incidentId || `inc-${block.id}-${ctx.timestamp}`;
+            state.activeIncidentId = resolvedIncidentId;
+
+            // Emit incident started event
+            ctx.emit({
+                id: `incident-start-${block.id}-${ctx.timestamp}`,
+                type: 'INCIDENT_STARTED',
+                timestamp: ctx.timestamp,
+                sourceBlockId: block.id,
+                incidentId: resolvedIncidentId,
+                data: { reason },
+                priority: 100
+            });
+
+            ctx.emit({
+                id: `failure-${block.id}-${ctx.timestamp}`,
+                type: 'FAILURE_OCCURRED',
+                timestamp: ctx.timestamp,
+                sourceBlockId: block.id,
+                incidentId: resolvedIncidentId,
+                data: { reason, incidentId: resolvedIncidentId },
+                priority: 50
+            });
+
+            const downstream = ctx.getConnections(block.id);
+            downstream.forEach(targetId => {
+                const target = ctx.getBlock(targetId);
+                if (target?.type === 'Signal') {
+                    ctx.schedule('FAILURE_OCCURRED', 0, targetId, {
+                        sourceId: block.id,
+                        incidentId: resolvedIncidentId
+                    });
+                } else {
+                    ctx.schedule('dependency_check', 0, targetId, {
+                        sourceId: block.id,
+                        status: 'down',
+                        incidentId: resolvedIncidentId
+                    });
+                }
+            });
+
+            if (config.recoveryRate > 0) {
+                ctx.schedule('RECOVERY_CHECK', 1, block.id, { incidentId: resolvedIncidentId });
+            }
+        };
 
         // Handle Deployments
         if (event.type === 'DEPLOYMENT_STARTED') {
@@ -20,45 +72,31 @@ export const ServiceBehavior: BlockBehavior = {
             const failureProb = canary ? risk * 0.5 : risk;
 
             if (ctx.random.boolean(failureProb)) {
-                if (state.status !== 'down') {
-                    state.status = 'down';
-                    const incidentId = `inc-${block.id}-${ctx.timestamp}`;
-
-                    // Emit incident started event
-                    ctx.emit({
-                        id: `incident-start-${block.id}-${ctx.timestamp}`,
-                        type: 'INCIDENT_STARTED',
-                        timestamp: ctx.timestamp,
-                        sourceBlockId: block.id,
-                        incidentId,
-                        data: { reason: 'bad_deployment' },
-                        priority: 100
-                    });
-
-                    ctx.emit({
-                        id: `failure-${block.id}-${ctx.timestamp}`,
-                        type: 'FAILURE_OCCURRED',
-                        timestamp: ctx.timestamp,
-                        sourceBlockId: block.id,
-                        data: { reason: 'bad_deployment', incidentId },
-                        priority: 50
-                    });
-                }
+                startIncident('bad_deployment');
             }
         }
-        else if (event.type === 'FAILURE_OCCURRED' || (event.type === 'dependency_check' && event.data?.status === 'down')) {
-            // Check cascading failure
-            if (state.status !== 'down') {
-                if (ctx.random.boolean(config.baseFailureRate)) {
-                    state.status = 'down';
-                    ctx.emit({
-                        id: `failure-${block.id}-${ctx.timestamp}`,
-                        type: 'FAILURE_OCCURRED',
-                        timestamp: ctx.timestamp,
-                        sourceBlockId: block.id,
-                        data: { reason: 'dependency_cascade' }
-                    });
-                }
+        else if (event.type === 'FAILURE_OCCURRED') {
+            startIncident(event.data?.reason || 'failure', event.data?.incidentId);
+        }
+        else if (event.type === 'SERVICE_HEALTH_CHECK') {
+            if (state.status === 'healthy' && ctx.random.boolean(config.baseFailureRate)) {
+                startIncident('base_failure');
+            }
+            ctx.schedule('SERVICE_HEALTH_CHECK', 1, block.id);
+        }
+        else if (event.type === 'dependency_check' && event.data?.status === 'down') {
+            startIncident('dependency_cascade', event.data?.incidentId);
+        }
+        else if (event.type === 'high_load') {
+            const multiplier = event.data?.multiplier ?? 1;
+            const effectiveRate = Math.min(1, config.baseFailureRate * multiplier);
+            if (state.status === 'healthy' && ctx.random.boolean(effectiveRate)) {
+                startIncident('traffic_spike');
+            }
+        }
+        else if (event.type === 'dependency_check' && event.data?.status === 'healthy') {
+            if (state.status === 'down' && config.recoveryRate > 0) {
+                ctx.schedule('RECOVERY_CHECK', 1, block.id, { incidentId: state.activeIncidentId });
             }
         }
         else if (event.type === 'SERVICE_RECOVERED') {
@@ -66,7 +104,8 @@ export const ServiceBehavior: BlockBehavior = {
                 state.status = 'healthy';
 
                 // Find the incident ID from the original failure event
-                const incidentId = event.data?.incidentId || `inc-${block.id}-unknown`;
+                const incidentId = event.data?.incidentId || state.activeIncidentId || `inc-${block.id}-unknown`;
+                state.activeIncidentId = undefined;
 
                 // Emit incident resolved event
                 ctx.emit({
@@ -81,8 +120,21 @@ export const ServiceBehavior: BlockBehavior = {
                 // Notify downstream
                 const downstream = ctx.getConnections(block.id);
                 downstream.forEach(targetId => {
-                    ctx.schedule('dependency_check', 0, targetId, { sourceId: block.id, status: 'healthy' });
+                    const target = ctx.getBlock(targetId);
+                    if (target?.type !== 'Signal') {
+                        ctx.schedule('dependency_check', 0, targetId, { sourceId: block.id, status: 'healthy' });
+                    }
                 });
+            }
+        }
+        else if (event.type === 'RECOVERY_CHECK') {
+            if (state.status === 'down') {
+                const incidentId = event.data?.incidentId || state.activeIncidentId;
+                if (ctx.random.boolean(config.recoveryRate)) {
+                    ctx.schedule('SERVICE_RECOVERED', 0, block.id, { incidentId });
+                } else {
+                    ctx.schedule('RECOVERY_CHECK', 1, block.id, { incidentId });
+                }
             }
         }
     }
@@ -96,18 +148,27 @@ export const DependencyBehavior: BlockBehavior = {
 
         if (event.type === 'dependency_check') {
             const upstreamStatus = event.data?.status;
+            const incidentId = event.data?.incidentId;
 
             if (upstreamStatus === 'down') {
                 const downstream = ctx.getConnections(block.id);
                 downstream.forEach(targetId => {
                     if (config.type === 'hard' || ctx.random.boolean(config.impact)) {
-                        ctx.schedule('dependency_check', 0, targetId, { sourceId: block.id, status: 'down' });
+                        ctx.schedule('dependency_check', 0, targetId, {
+                            sourceId: block.id,
+                            status: 'down',
+                            incidentId
+                        });
                     }
                 });
             } else if (upstreamStatus === 'healthy') {
                 const downstream = ctx.getConnections(block.id);
                 downstream.forEach(targetId => {
-                    ctx.schedule('dependency_check', 0, targetId, { sourceId: block.id, status: 'healthy' });
+                    ctx.schedule('dependency_check', 0, targetId, {
+                        sourceId: block.id,
+                        status: 'healthy',
+                        incidentId
+                    });
                 });
             }
         }

@@ -20,6 +20,9 @@ export const SignalBehavior: BlockBehavior = {
         if (event.type === 'dependency_check' && event.data?.status === 'down') {
             detected = true;
         }
+        else if (event.type === 'FAILURE_OCCURRED') {
+            detected = true;
+        }
         else if (event.type === 'high_load' && config.metric === 'latency') {
             detected = true;
         }
@@ -51,7 +54,8 @@ export const SignalBehavior: BlockBehavior = {
                 ctx.schedule('SIGNAL_DETECTED', delay, targetId, {
                     sourceSignalId: block.id,
                     metric: config.metric,
-                    isFalsePositive // Metadata for debugging/analysis
+                    isFalsePositive, // Metadata for debugging/analysis
+                    incidentId: event.data?.incidentId
                 });
             });
         }
@@ -98,7 +102,8 @@ export const AlertRuleBehavior: BlockBehavior = {
                     data: {
                         severity: 'critical',
                         // Safety check: cast to any to access specific config
-                        runbookQuality: runbook ? (runbook.config as any).quality : undefined
+                        runbookQuality: runbook ? (runbook.config as any).quality : undefined,
+                        incidentId: event.data?.incidentId
                     },
                     priority: 10
                 });
@@ -113,7 +118,8 @@ export const AlertRuleBehavior: BlockBehavior = {
                     if (target && target.type !== 'Runbook') {
                         ctx.schedule('ALERT_FIRED', 0, targetId, {
                             alertId: `alert-${block.id}-${ctx.timestamp}`,
-                            runbookQuality: runbook ? (runbook.config as any).quality : undefined
+                            runbookQuality: runbook ? (runbook.config as any).quality : undefined,
+                            incidentId: event.data?.incidentId
                         });
                     }
                 });
@@ -143,7 +149,10 @@ export const OnCallBehavior: BlockBehavior = {
                 // Pick one based on schedule?
                 // Random for v1 if multiple.
                 const targetId = downstream[Math.floor(ctx.random.next() * downstream.length)];
-                ctx.schedule('PAGE_SENT', 0, targetId, { alertId: event.id });
+                ctx.schedule('PAGE_SENT', 0, targetId, {
+                    alertId: event.data?.alertId ?? event.id,
+                    incidentId: event.data?.incidentId
+                });
             } else {
                 // No one on call! Gap!
                 // Maybe log metric?
