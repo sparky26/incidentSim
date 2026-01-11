@@ -147,7 +147,3 @@ src/
 - **Monte Carlo runs**: change `NUM_RUNS` in `src/App.tsx` to adjust simulation volume.
 - **New block types**: add to `BlockType` and `BlockConfig`, implement behavior, and register in the UI and connection rules.
 - **Metrics**: update `SimulationEngine` to emit more aggregates or export detailed event logs.
-
-## Screenshots
-
-To capture UI changes, run the app and take a screenshot (not required for this README-only change).
