@@ -14,6 +14,7 @@ import {
 import type { Block, BlockType, BlockConfig } from '../types/blocks';
 import type { SimulationConfig, SimulationRunResult } from '../types/simulation';
 import { v4 as uuidv4 } from 'uuid';
+import { isConnectionAllowed } from '../utils/connectionRules';
 
 // Default configs for new blocks
 const DEFAULT_CONFIGS: Record<BlockType, BlockConfig> = {
@@ -78,6 +79,12 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
         });
     },
     onConnect: (connection) => {
+        const { nodes } = get();
+        const sourceType = nodes.find((node) => node.id === connection.source)?.type as BlockType | undefined;
+        const targetType = nodes.find((node) => node.id === connection.target)?.type as BlockType | undefined;
+        if (!isConnectionAllowed(sourceType, targetType)) {
+            return;
+        }
         set({
             edges: addEdge(connection, get().edges),
         });
