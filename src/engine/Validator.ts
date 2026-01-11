@@ -1,4 +1,5 @@
-import { Block } from '../types/blocks';
+import { Block, BlockType } from '../types/blocks';
+import { isConnectionAllowed } from '../utils/connectionRules';
 
 // Define Connection locally or import if available
 interface Connection {
@@ -17,9 +18,15 @@ export class ScenarioValidator {
 
         // 2. Connector Integrity
         const blockIds = new Set(blocks.map(b => b.id));
+        const blockTypes = new Map(blocks.map(b => [b.id, b.type]));
         connections.forEach(conn => {
             if (!blockIds.has(conn.source)) errors.push(`Connection source ${conn.source} not found.`);
             if (!blockIds.has(conn.target)) errors.push(`Connection target ${conn.target} not found.`);
+            const sourceType = blockTypes.get(conn.source);
+            const targetType = blockTypes.get(conn.target);
+            if (sourceType && targetType && !isConnectionAllowed(sourceType, targetType)) {
+                errors.push(`Connection ${sourceType} → ${targetType} is not allowed.`);
+            }
         });
 
         // 3. Block Configuration Validation
