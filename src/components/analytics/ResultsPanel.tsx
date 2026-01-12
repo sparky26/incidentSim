@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { useScenarioStore } from '../../store/scenarioStore';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { getEvidenceProfile } from '../../data/evidenceCatalog';
+import { aggregateSimulationResults } from '../../utils/analytics';
 
 const ResultsPanel = () => {
     const { results, setResults, simulationConfig } = useScenarioStore();
@@ -10,42 +11,7 @@ const ResultsPanel = () => {
 
     const stats = useMemo(() => {
         if (!results || results.length === 0) return null;
-
-        const successfulRuns = results.filter(r => r.success);
-        const failedRuns = results.filter(r => !r.success); // Timed out
-        const resolvedTimes = successfulRuns.map(r => r.finalTime).sort((a, b) => a - b);
-
-        const avgMTTR = resolvedTimes.reduce((a, b) => a + b, 0) / resolvedTimes.length;
-        const p90MTTR = resolvedTimes[Math.floor(resolvedTimes.length * 0.9)] || 0;
-        const p95MTTR = resolvedTimes[Math.floor(resolvedTimes.length * 0.95)] || 0;
-
-        // Histogram buckets (10 buckets)
-        if (resolvedTimes.length === 0) {
-            return { count: results.length, successRate: 0, avgMTTR: 0, p90: 0, histogram: [] };
-        }
-
-        const min = resolvedTimes[0];
-        const max = resolvedTimes[resolvedTimes.length - 1];
-        const range = max - min || 10;
-        const step = range / 10;
-
-        const histogram = Array.from({ length: 10 }).map((_, i) => {
-            const start = min + i * step;
-            const end = start + step;
-            const count = resolvedTimes.filter(t => t >= start && t < end).length;
-            return {
-                range: `${Math.round(start)}-${Math.round(end)}m`,
-                count
-            };
-        });
-
-        return {
-            count: results.length,
-            successRate: (successfulRuns.length / results.length) * 100,
-            avgMTTR,
-            p90: p90MTTR,
-            histogram
-        };
+        return aggregateSimulationResults(results);
     }, [results]);
 
     if (!results || !stats) return null;
@@ -99,17 +65,76 @@ const ResultsPanel = () => {
                         </div>
                     </div>
 
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="text-sm text-slate-600 font-medium">Avg customer impact minutes</div>
+                            <div className="text-2xl font-bold text-slate-900">
+                                {Math.round(stats.avgCustomerImpactMinutes)}m
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="text-sm text-slate-600 font-medium">Avg incidents per run</div>
+                            <div className="text-2xl font-bold text-slate-900">
+                                {stats.avgIncidentCount.toFixed(1)}
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="text-sm text-slate-600 font-medium">Avg resolved incidents</div>
+                            <div className="text-2xl font-bold text-slate-900">
+                                {stats.avgResolvedCount.toFixed(1)}
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="text-sm text-slate-600 font-medium">MTTR p95 + std dev + CI</div>
+                            <div className="text-lg font-bold text-slate-900">
+                                {Math.round(stats.p95)}m p95 · {stats.mttrStdDev.toFixed(1)}m σ
+                            </div>
+                            <div className="text-xs text-slate-500">
+                                {stats.mttrCi
+                                    ? `95% CI ±${stats.mttrCi.margin.toFixed(1)}m (${Math.round(stats.mttrCi.lower)}-${Math.round(stats.mttrCi.upper)}m)`
+                                    : '95% CI unavailable (insufficient samples)'}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Histogram */}
                     <div className="h-64">
                         <h3 className="text-sm font-bold text-gray-700 mb-4">Duration Distribution (Minutes)</h3>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.histogram}>
-                                <XAxis dataKey="range" fontSize={11} stroke="#9CA3AF" />
+                                <XAxis
+                                    dataKey="bucket"
+                                    type="number"
+                                    fontSize={11}
+                                    stroke="#9CA3AF"
+                                    tickFormatter={(value: number) => `${Math.round(value)}m`}
+                                />
                                 <YAxis fontSize={11} stroke="#9CA3AF" />
                                 <Tooltip
+                                    formatter={(value: number) => [`${value}`, 'Count']}
+                                    labelFormatter={(value: number) => `~${Math.round(value)}m`}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 />
                                 <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                                <ReferenceLine
+                                    x={stats.avgMTTR}
+                                    stroke="#0F172A"
+                                    strokeDasharray="3 3"
+                                    label={{ value: 'Mean', position: 'top', fill: '#0F172A', fontSize: 10 }}
+                                />
+                                <ReferenceLine
+                                    x={stats.p90}
+                                    stroke="#6366F1"
+                                    strokeDasharray="4 4"
+                                    label={{ value: 'P90', position: 'top', fill: '#6366F1', fontSize: 10 }}
+                                />
+                                <ReferenceLine
+                                    x={stats.p95}
+                                    stroke="#14B8A6"
+                                    strokeDasharray="4 4"
+                                    label={{ value: 'P95', position: 'top', fill: '#14B8A6', fontSize: 10 }}
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -117,9 +142,11 @@ const ResultsPanel = () => {
                     {/* Debug / Insights */}
                     <div className="p-4 bg-yellow-50 border border-yellow-100 rounded text-sm text-yellow-800">
                         <strong>Insight:</strong>
-                        {stats.p90 > stats.avgMTTR * 1.5
-                            ? " High variance detected. Long-tail incidents significantly impact reliability."
-                            : " Distribution is relatively tight. Response process is consistent."}
+                        {stats.mttrCi && stats.mttrCi.width > stats.avgMTTR * 0.4
+                            ? ' High uncertainty detected. Confidence interval is wide relative to the mean.'
+                            : stats.p90 > stats.avgMTTR * 1.5
+                                ? ' High variance detected. Long-tail incidents significantly impact reliability.'
+                                : ' Distribution is relatively tight. Response process is consistent.'}
                     </div>
                 </div>
 
