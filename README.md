@@ -2,15 +2,65 @@
 
 Reliability Twin is a browser-based incident management simulator. It lets you model a service ecosystem as a directed graph of blocks (services, signals, responders, actions, etc.), run Monte Carlo-style simulations, and analyze outcomes like MTTR and success rate. The UI is built with React + React Flow for the visual editor, while the simulation engine is a discrete-event system implemented in TypeScript.
 
-## What the app does
+## Table of contents
+
+- [Key capabilities](#key-capabilities)
+- [Quick start](#quick-start)
+- [Scripts](#scripts)
+- [How the simulator works](#how-the-simulator-works)
+  - [Visual incident modeling](#visual-incident-modeling)
+  - [Simulation and analytics](#simulation-and-analytics)
+  - [Data flow at runtime](#data-flow-at-runtime)
+- [Core architecture](#core-architecture)
+- [Project structure](#project-structure)
+- [Configuration and extension points](#configuration-and-extension-points)
+- [Troubleshooting](#troubleshooting)
+
+## Key capabilities
+
+- **Drag-and-drop graph editor** for system, detection, human, process, and mitigation components.
+- **Connection constraints** that enforce valid relationships between block types (e.g., Service → Signal, AlertRule → OnCall).
+- **Inspector panel** with in-context tooltips for each block property and its impact on simulation behavior.
+- **Template scenarios** for common incident patterns (dependency failures, alert storms, escalation chains).
+- **Monte Carlo simulation** with seeded randomness for reproducibility and broad outcome coverage.
+- **Analytics output** including incident counts, customer impact minutes, MTTR, and success rate.
+
+## Quick start
+
+### Prerequisites
+
+- Node.js 18+ (LTS recommended)
+- npm 9+ (or a compatible package manager)
+
+### Install and run
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the local URL printed in the terminal (typically `http://localhost:5173`).
+
+## Scripts
+
+```bash
+npm run dev       # Start the Vite dev server
+npm run build     # Build for production
+npm run lint      # Run ESLint
+npm run preview   # Preview the production build locally
+```
+
+## How the simulator works
 
 ### Visual incident modeling
-- **Drag-and-drop block library** for system, detection, human, process, and mitigation components.
-- **Connection constraints** enforce valid relationships between block types (e.g., Service → Signal, AlertRule → OnCall).
-- **Inspector panel** exposes block configuration fields with tooltips that explain each property.
-- **Template scenarios** provide example graphs to get started quickly.
+
+- **Block library** lets you place services, detection signals, alert rules, responders, and mitigations onto the canvas.
+- **Connection rules** ensure you only link compatible block types, preventing invalid flow graphs.
+- **Inspector panel** provides editable configs with tooltips sourced from `src/data/propertyDefinitions.ts`.
+- **Template scenarios** help you bootstrap complex graphs quickly.
 
 ### Simulation and analytics
+
 - Runs **100 randomized simulations** per scenario by default, varying the seed for Monte Carlo coverage.
 - Produces per-run event logs and aggregates metrics like:
   - **Incident count**
@@ -18,26 +68,20 @@ Reliability Twin is a browser-based incident management simulator. It lets you m
   - **Customer impact (minutes)**
   - **MTTR (mean time to recovery)**
   - **Success rate**
-- Visualizes results using a histogram and summary cards.
+- Visualizes results using histogram plots and summary cards.
 
-## How to run the app locally
+### Data flow at runtime
 
-```bash
-npm install
-npm run dev
-```
-
-Other scripts:
-
-```bash
-npm run build
-npm run lint
-npm run preview
-```
+1. **User builds a scenario** in the graph editor.
+2. **Scenario validation** runs via `ScenarioValidator` before any simulation.
+3. **Simulation run** converts nodes/edges into engine blocks.
+4. **Engine executes events** through per-block behaviors.
+5. **Results are aggregated** into metrics and visualized in the results panel.
 
 ## Core architecture
 
 ### 1) React UI (graph editor + inspector + results)
+
 - `src/App.tsx`
   - Orchestrates the simulation run.
   - Converts React Flow nodes/edges into engine blocks.
@@ -55,12 +99,14 @@ npm run preview
   - Renders summary metrics and a histogram with Recharts.
 
 ### 2) State management
+
 - `src/store/scenarioStore.ts`
   - Uses Zustand to store graph nodes/edges, simulation config, and results.
   - Provides actions for editing nodes, connecting edges, loading templates, and updating configs.
   - Defines default configs for each block type.
 
 ### 3) Simulation engine (discrete-event)
+
 - `src/engine/SimulationEngine.ts`
   - Core event loop with a priority queue.
   - Executes per-block behaviors based on event type.
@@ -73,6 +119,7 @@ npm run preview
   - Validates block configs and ensures connections match allowed rules.
 
 ### 4) Block behaviors
+
 Each block type has a behavior that reacts to simulation events.
 
 **System blocks (`src/engine/behaviors/SystemBlocks.ts`)**
@@ -96,18 +143,11 @@ Each block type has a behavior that reacts to simulation events.
 - **Action**: executes mitigation work with duration and success probabilities; successful actions recover services.
 
 ### 5) Data model and configuration
+
 - Block types and configs are defined in `src/types/blocks.ts`.
 - Simulation events, run results, and configs are defined in `src/types/simulation.ts`.
 - Connection rules between block types live in `src/utils/connectionRules.ts`.
 - Example scenarios are stored in `src/data/templates.ts`.
-
-## Data flow at runtime
-
-1. **User builds scenario** in the graph editor.
-2. **App validates** the graph with `ScenarioValidator`.
-3. **Simulation run** converts nodes/edges into engine blocks.
-4. **Engine executes events** through block behaviors.
-5. **Results are aggregated** into metrics and visualized in the results panel.
 
 ## Project structure
 
@@ -142,8 +182,21 @@ src/
     connectionRules.ts
 ```
 
-## Notes and extension points
+## Configuration and extension points
 
-- **Monte Carlo runs**: change `NUM_RUNS` in `src/App.tsx` to adjust simulation volume.
-- **New block types**: add to `BlockType` and `BlockConfig`, implement behavior, and register in the UI and connection rules.
-- **Metrics**: update `SimulationEngine` to emit more aggregates or export detailed event logs.
+- **Simulation volume**: change `NUM_RUNS` in `src/App.tsx` to adjust simulation count.
+- **New block types**:
+  1. Extend `BlockType` and `BlockConfig` in `src/types/blocks.ts`.
+  2. Implement behavior in `src/engine/behaviors/*`.
+  3. Register UI defaults in `src/store/scenarioStore.ts`.
+  4. Add palette metadata in the sidebar and property definitions.
+  5. Update connection rules in `src/utils/connectionRules.ts`.
+- **Metrics**: update `src/engine/SimulationEngine.ts` to emit more aggregates or export detailed event logs.
+- **Validation**: adjust `src/engine/Validator.ts` to enforce stricter scenario rules.
+
+## Troubleshooting
+
+- **Blank canvas or missing styles**: ensure `npm install` completed and the dev server is running.
+- **Simulation fails to run**: check the validation errors surfaced by the UI; common issues are missing required connections.
+- **Unexpected metrics**: verify block configs in the Inspector panel and confirm your intended probabilities/latencies.
+- **Type errors during build**: run `npm run lint` and fix any reported issues in the affected file paths.
