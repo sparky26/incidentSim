@@ -4,6 +4,9 @@ import { SimulationEvent } from '../../types/simulation';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const samplePositiveLogNormal = (mean: number, stdDev: number, ctx: SimulationContext) =>
+    Math.max(1, ctx.random.nextLogNormal(mean, stdDev));
+
 const findCommanderBonus = (blockId: string, ctx: SimulationContext, severity: number) => {
     const connections = ctx.connections.filter(c => c.source === blockId || c.target === blockId);
     const candidateIds = new Set<string>();
@@ -46,11 +49,15 @@ export const ActionBehavior: BlockBehavior = {
             const commanderBonus = findCommanderBonus(block.id, ctx, severity);
 
             let durationMean = config.durationMean;
-            durationMean *= 1 - runbookQuality * 0.3;
-            durationMean *= 1 + runbookPenalty;
-            durationMean *= 1 - commanderBonus * 0.2;
+            let durationStdDev = config.durationStdDev;
+            const runbookModifier = 1 - runbookQuality * 0.3;
+            const runbookPenaltyModifier = 1 + runbookPenalty;
+            const commanderModifier = 1 - commanderBonus * 0.2;
 
-            const duration = ctx.random.nextLogNormal(durationMean, durationMean * 0.25);
+            durationMean *= runbookModifier * runbookPenaltyModifier * commanderModifier;
+            durationStdDev *= runbookModifier * runbookPenaltyModifier * commanderModifier;
+
+            const duration = samplePositiveLogNormal(durationMean, durationStdDev, ctx);
 
             ctx.schedule('ACTION_COMPLETED', duration, block.id, event.data, block.id);
         }

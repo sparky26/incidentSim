@@ -34,11 +34,11 @@ const DEFAULT_CONFIGS: Record<BlockType, BlockConfig> = {
     'AlertRule': buildDefaultConfig('AlertRule', { label: 'Alert Rule', threshold: 1, durationMinutes: 5 } as any),
     'OnCall': buildDefaultConfig('OnCall', { label: 'OnCall', scheduleId: 'default', handoverProtocol: 'weak' } as any),
     'Escalation': buildDefaultConfig('Escalation', { label: 'Escalation', steps: [] } as any),
-    'Responder': buildDefaultConfig('Responder', { label: 'Responder', baseResponseTimeMean: 10, fatigueSensitivity: 0.1, shiftLengthHours: 8 } as any),
+    'Responder': buildDefaultConfig('Responder', { label: 'Responder', baseResponseTimeMean: 10, baseResponseTimeStdDev: 3, fatigueSensitivity: 0.1, shiftLengthHours: 8 } as any),
     'Commander': buildDefaultConfig('Commander', { label: 'Commander', experienceLevel: 5, coordinationBonus: 0.2 } as any),
     'CommChannel': buildDefaultConfig('CommChannel', { label: 'Slack', latency: 0.1, contextLossProb: 0.01 } as any),
     'Runbook': buildDefaultConfig('Runbook', { label: 'SOP', quality: 0.8, isOutdated: false, automated: false } as any),
-    'Action': buildDefaultConfig('Action', { label: 'Action', requiredSkill: '', durationMean: 15, successProbability: 0.9, isRollback: false } as any),
+    'Action': buildDefaultConfig('Action', { label: 'Action', requiredSkill: '', durationMean: 15, durationStdDev: 4, successProbability: 0.9, isRollback: false } as any),
 };
 
 interface ScenarioState {

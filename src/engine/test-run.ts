@@ -49,6 +49,7 @@ const blocks: Block[] = [
         config: {
             label: 'Alice',
             baseResponseTimeMean: 5,
+            baseResponseTimeStdDev: 1.5,
             skillTags: ['web'],
             fatigueSensitivity: 1
         } as ResponderConfig
@@ -61,6 +62,7 @@ const blocks: Block[] = [
             label: 'Restart Service',
             requiredSkill: 'web',
             durationMean: 5,
+            durationStdDev: 1.5,
             successProbability: 0.9,
             isRollback: false
         } as ActionConfig

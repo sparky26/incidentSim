@@ -87,6 +87,25 @@ const INDUSTRY_SOURCES: EvidenceSource[] = [
         },
     },
     {
+        id: 'industry-sre-response-2024',
+        type: 'industry',
+        title: 'SRE Response Time Survey Ranges (2024)',
+        summary: 'Survey ranges for on-call response and mitigation durations across SRE teams.',
+        url: 'https://example.com/sre-response-2024',
+        derivedParameters: {
+            Responder: {
+                baseResponseTimeMean: 7,
+                baseResponseTimeStdDev: 2.5,
+                fatigueSensitivity: 0.16,
+            },
+            Action: {
+                durationMean: 9,
+                durationStdDev: 3,
+                successProbability: 0.88,
+            },
+        },
+    },
+    {
         id: 'industry-vendor-sla-2022',
         type: 'industry',
         title: 'Cloud Vendor SLA Benchmarks (2022)',
@@ -115,6 +134,13 @@ export const EVIDENCE_PROFILES: EvidenceProfile[] = [
         description: 'Parameters aligned with industry surveys and SLA benchmarks.',
         sources: INDUSTRY_SOURCES,
         parameterOverrides: mergeDerivedParameters(INDUSTRY_SOURCES),
+    },
+    {
+        id: 'evidence-sre-survey-ranges',
+        name: 'SRE Survey Ranges',
+        description: 'Empirical response-time ranges reported in SRE survey data.',
+        sources: [INDUSTRY_SOURCES[1]],
+        parameterOverrides: mergeDerivedParameters([INDUSTRY_SOURCES[1]]),
     },
     {
         id: 'evidence-hybrid',

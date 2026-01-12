@@ -51,7 +51,7 @@ export class ScenarioValidator {
         });
 
         // Non-negative time
-        ['slaResponseTime', 'detectionDelayMean', 'durationMinutes', 'baseResponseTimeMean', 'durationMean'].forEach(key => {
+        ['slaResponseTime', 'detectionDelayMean', 'durationMinutes', 'baseResponseTimeMean', 'baseResponseTimeStdDev', 'durationMean', 'durationStdDev'].forEach(key => {
             if (key in config) {
                 const val = (config as any)[key];
                 if (val < 0) issues.push(`${key} must be positive.`);

@@ -33,6 +33,16 @@ const Inspector = () => {
         updateBlockConfig(id, { [key]: value });
     };
 
+    const getDistributionRange = (key: string, value: number) => {
+        if (!key.endsWith('StdDev')) return null;
+        const meanKey = key.replace('StdDev', 'Mean');
+        const meanValue = data[meanKey];
+        if (typeof meanValue !== 'number') return null;
+        const min = Math.max(0, meanValue - 2 * value);
+        const max = meanValue + 2 * value;
+        return `Approx range (±2σ): ${min.toFixed(2)}–${max.toFixed(2)}`;
+    };
+
     const handleEvidenceChange = (profileId: string) => {
         updateBlockConfig(id, {
             evidenceProfileId: profileId,
@@ -152,13 +162,20 @@ const Inspector = () => {
                                     />
                                 )
                             ) : (
-                                <input
-                                    type="number"
-                                    step="0.001"
-                                    value={value as number}
-                                    onChange={(e) => handleChange(key, e.target.value)}
-                                    className="w-full px-2 py-1 border rounded text-sm font-mono"
-                                />
+                                <>
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        value={value as number}
+                                        onChange={(e) => handleChange(key, e.target.value)}
+                                        className="w-full px-2 py-1 border rounded text-sm font-mono"
+                                    />
+                                    {typeof value === 'number' && getDistributionRange(key, value) && (
+                                        <p className="text-[11px] text-gray-500 mt-1">
+                                            {getDistributionRange(key, value)}
+                                        </p>
+                                    )}
+                                </>
                             )}
                         </div>
                     );
