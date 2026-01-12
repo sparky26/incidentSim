@@ -34,18 +34,27 @@ export const TEMPLATES: Template[] = [
         description: 'A critical dependency goes down, SLA is breached.',
         nodes: [
             { id: 'vend-1', type: 'Vendor', position: { x: 100, y: 50 }, data: { label: 'Payment API', outageProbability: 0.05, slaResponseTime: 45 } as any },
-            { id: 'srv-main', type: 'Service', position: { x: 100, y: 200 }, data: { label: 'Checkout Service', baseFailureRate: 0, recoveryRate: 1 } as any },
             { id: 'dep-1', type: 'Dependency', position: { x: 100, y: 125 }, data: { label: 'API Link', type: 'hard', impact: 1 } as any },
+            { id: 'srv-main', type: 'Service', position: { x: 100, y: 200 }, data: { label: 'Checkout Service', baseFailureRate: 0, recoveryRate: 1 } as any },
             { id: 'sig-1', type: 'Signal', position: { x: 300, y: 200 }, data: { label: 'Checkout Failures', metric: 'errors' } as any },
             { id: 'alert-1', type: 'AlertRule', position: { x: 500, y: 200 }, data: { label: 'P0 Alert' } as any },
-            { id: 'comm-1', type: 'CommChannel', position: { x: 700, y: 200 }, data: { label: 'Status Page update' } as any },
+            { id: 'runbook-1', type: 'Runbook', position: { x: 500, y: 120 }, data: { label: 'Payments Runbook', quality: 0.7, isOutdated: false, automated: false } as any },
+            { id: 'oncall-1', type: 'OnCall', position: { x: 500, y: 320 }, data: { label: 'Payments OnCall', scheduleId: 'primary' } as any },
+            { id: 'commander-1', type: 'Commander', position: { x: 720, y: 320 }, data: { label: 'Incident Lead', experienceLevel: 8, coordinationBonus: 0.3 } as any },
+            { id: 'responder-1', type: 'Responder', position: { x: 500, y: 440 }, data: { label: 'Payments Responder', baseResponseTimeMean: 8, fatigueSensitivity: 0.2, skillTags: ['payments'] } as any },
+            { id: 'action-1', type: 'Action', position: { x: 500, y: 560 }, data: { label: 'Failover Vendor', requiredSkill: 'payments', durationMean: 12, successProbability: 0.85, isRollback: false } as any },
         ],
         edges: [
             { id: 'e1', source: 'vend-1', target: 'dep-1' },
             { id: 'e2', source: 'dep-1', target: 'srv-main' },
             { id: 'e3', source: 'srv-main', target: 'sig-1' },
             { id: 'e4', source: 'sig-1', target: 'alert-1' },
-            { id: 'e5', source: 'alert-1', target: 'comm-1' },
+            { id: 'e5', source: 'runbook-1', target: 'alert-1' },
+            { id: 'e6', source: 'alert-1', target: 'oncall-1' },
+            { id: 'e7', source: 'commander-1', target: 'responder-1' },
+            { id: 'e8', source: 'oncall-1', target: 'responder-1' },
+            { id: 'e9', source: 'responder-1', target: 'action-1' },
+            { id: 'e10', source: 'action-1', target: 'srv-main' },
         ]
     },
     {
@@ -56,13 +65,24 @@ export const TEMPLATES: Template[] = [
             { id: 'fe-1', type: 'Service', position: { x: 50, y: 200 }, data: { label: 'Frontend', baseFailureRate: 0.01 } as any },
             { id: 'be-1', type: 'Service', position: { x: 50, y: 350 }, data: { label: 'Backend', baseFailureRate: 0.01 } as any },
             { id: 'dep-1', type: 'Dependency', position: { x: 50, y: 275 }, data: { label: 'RPC', type: 'hard', impact: 1 } as any },
-            { id: 'autoscaler', type: 'Action', position: { x: 250, y: 350 }, data: { label: 'Scale Up', durationMean: 5, successProbability: 0.7 } as any },
+            { id: 'sig-1', type: 'Signal', position: { x: 260, y: 350 }, data: { label: 'Backend Errors', metric: 'errors' } as any },
+            { id: 'alert-1', type: 'AlertRule', position: { x: 460, y: 350 }, data: { label: 'Backend Alert', threshold: 5, durationMinutes: 2 } as any },
+            { id: 'runbook-1', type: 'Runbook', position: { x: 460, y: 260 }, data: { label: 'Scale Playbook', quality: 0.8, isOutdated: false, automated: false } as any },
+            { id: 'oncall-1', type: 'OnCall', position: { x: 460, y: 470 }, data: { label: 'Traffic OnCall', scheduleId: 'primary' } as any },
+            { id: 'responder-1', type: 'Responder', position: { x: 460, y: 590 }, data: { label: 'SRE Responder', baseResponseTimeMean: 6, fatigueSensitivity: 0.15, skillTags: ['scaling'] } as any },
+            { id: 'autoscaler', type: 'Action', position: { x: 460, y: 710 }, data: { label: 'Scale Up', requiredSkill: 'scaling', durationMean: 5, successProbability: 0.7, isRollback: false } as any },
         ],
         edges: [
             { id: 'e1', source: 'traf-1', target: 'fe-1' },
             { id: 'e2', source: 'fe-1', target: 'dep-1' },
             { id: 'e3', source: 'dep-1', target: 'be-1' },
-            { id: 'e4', source: 'be-1', target: 'autoscaler' }, // Simplified: Backend failures trigger action?
+            { id: 'e4', source: 'be-1', target: 'sig-1' },
+            { id: 'e5', source: 'sig-1', target: 'alert-1' },
+            { id: 'e6', source: 'runbook-1', target: 'alert-1' },
+            { id: 'e7', source: 'alert-1', target: 'oncall-1' },
+            { id: 'e8', source: 'oncall-1', target: 'responder-1' },
+            { id: 'e9', source: 'responder-1', target: 'autoscaler' },
+            { id: 'e10', source: 'autoscaler', target: 'be-1' },
         ]
     }
 ];
