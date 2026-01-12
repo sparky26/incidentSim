@@ -29,6 +29,7 @@ export const PROPERTY_DESCRIPTIONS: Record<string, string> = {
 
     // Human
     'baseResponseTimeMean': 'Average minutes to acknowledge/act without fatigue.',
+    'baseResponseTimeStdDev': 'Standard deviation of the response-time distribution.',
     'fatigueSensitivity': 'How much response time degrades with fatigue (0-1).',
     'shiftLengthHours': 'Time before a required handover (risk of context loss).',
     'experienceLevel': 'Rating 1-10. Higher experience reduces errors.',
@@ -48,6 +49,7 @@ export const PROPERTY_DESCRIPTIONS: Record<string, string> = {
     // Mitigation
     'requiredSkill': 'Skill tag required to perform this action.',
     'durationMean': 'Average time to complete the action.',
+    'durationStdDev': 'Standard deviation of the action duration distribution.',
     'successProbability': 'Chance that the action actually fixes the problem.',
     'isRollback': 'If true, reverts the system to a previous stable state.',
 };

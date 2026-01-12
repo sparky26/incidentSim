@@ -4,6 +4,9 @@ import { SimulationEvent } from '../../types/simulation';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const samplePositiveLogNormal = (mean: number, stdDev: number, ctx: SimulationContext) =>
+    Math.max(1, ctx.random.nextLogNormal(mean, stdDev));
+
 const findCommanderBonus = (blockId: string, ctx: SimulationContext, severity: number) => {
     const connections = ctx.connections.filter(c => c.source === blockId || c.target === blockId);
     const candidateIds = new Set<string>();
@@ -61,32 +64,41 @@ export const ResponderBehavior: BlockBehavior = {
                 return;
             }
 
-            let responseTime = config.baseResponseTimeMean;
+            let responseTimeMean = config.baseResponseTimeMean;
+            let responseTimeStdDev = config.baseResponseTimeStdDev;
             const runbookQuality = event.data?.runbookQuality ?? 0;
             if (runbookQuality) {
                 const qualityBoost = event.data?.runbookOutdated ? -0.3 : 0.5;
-                responseTime *= 1 - runbookQuality * qualityBoost;
+                const modifier = 1 - runbookQuality * qualityBoost;
+                responseTimeMean *= modifier;
+                responseTimeStdDev *= modifier;
             } else {
-                responseTime *= 1.2;
+                responseTimeMean *= 1.2;
+                responseTimeStdDev *= 1.2;
             }
 
             const fatigue = state.fatigue || 0;
             const fatigueMultiplier = 1 + fatigue * config.fatigueSensitivity * 0.15;
-            responseTime *= fatigueMultiplier;
+            responseTimeMean *= fatigueMultiplier;
+            responseTimeStdDev *= fatigueMultiplier;
 
             const severity = event.data?.severity ?? 1;
             const commanderBonus = findCommanderBonus(block.id, ctx, severity);
-            responseTime *= 1 - commanderBonus * 0.2;
+            const commanderMultiplier = 1 - commanderBonus * 0.2;
+            responseTimeMean *= commanderMultiplier;
+            responseTimeStdDev *= commanderMultiplier;
 
             const contextLossProb = event.data?.contextLossProb ?? 0;
             if (contextLossProb > 0) {
-                responseTime *= 1 + contextLossProb * 0.5;
+                const contextMultiplier = 1 + contextLossProb * 0.5;
+                responseTimeMean *= contextMultiplier;
+                responseTimeStdDev *= contextMultiplier;
                 if (ctx.random.boolean(contextLossProb * 0.15)) {
-                    responseTime += 10;
+                    responseTimeMean += 10;
                 }
             }
 
-            const finalDuration = Math.max(1, responseTime * (0.8 + ctx.random.next() * 0.4));
+            const finalDuration = samplePositiveLogNormal(responseTimeMean, responseTimeStdDev, ctx);
             state.fatigue = fatigue + 1;
             state.timeActive = (state.timeActive || 0) + finalDuration;
 

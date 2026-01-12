@@ -73,6 +73,7 @@ export interface EscalationConfig extends BaseBlockConfig {
 // --- Human Blocks ---
 export interface ResponderConfig extends BaseBlockConfig {
     baseResponseTimeMean: number;
+    baseResponseTimeStdDev: number;
     fatigueSensitivity: number; // 0-1, how much fatigue slows them down
     shiftLengthHours: number;
 }
@@ -91,6 +92,7 @@ export interface CommChannelConfig extends BaseBlockConfig {
 export interface ActionConfig extends BaseBlockConfig {
     requiredSkill: string;
     durationMean: number;
+    durationStdDev: number;
     successProbability: number;
     isRollback: boolean;
 }
