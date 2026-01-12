@@ -1,6 +1,7 @@
 import { BlockBehavior, SimulationContext } from '../SimulationEngine';
 import { Block, ResponderConfig, CommanderConfig, CommChannelConfig } from '../../types/blocks';
 import { SimulationEvent } from '../../types/simulation';
+import { getRunbookEffectiveness } from '../../data/evidenceCatalog';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -47,6 +48,7 @@ export const ResponderBehavior: BlockBehavior = {
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
         const config = block.config as ResponderConfig;
         const state = ctx.state.get(block.id)!;
+        const runbookEffectiveness = getRunbookEffectiveness(config.evidenceProfileId);
 
         if (event.type === 'PAGE_SENT') {
             const shiftLength = config.shiftLengthHours * 60;
@@ -68,7 +70,7 @@ export const ResponderBehavior: BlockBehavior = {
             let responseTimeStdDev = config.baseResponseTimeStdDev;
             const runbookQuality = event.data?.runbookQuality ?? 0;
             if (runbookQuality) {
-                const qualityBoost = event.data?.runbookOutdated ? -0.3 : 0.5;
+                const qualityBoost = (event.data?.runbookOutdated ? -0.3 : 0.5) * runbookEffectiveness.responseDelay;
                 const modifier = 1 - runbookQuality * qualityBoost;
                 responseTimeMean *= modifier;
                 responseTimeStdDev *= modifier;

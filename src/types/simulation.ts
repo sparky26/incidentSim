@@ -59,6 +59,7 @@ export interface SimulationRunResult {
     events: SimulationEvent[];
     finalTime: number;
     success: boolean; // Incident resolved?
+    evidenceProfileId?: string;
     metrics: {
         customerImpactMinutes: number;
         incidentCount?: number;
@@ -71,4 +72,5 @@ export interface SimulationConfig {
     maxTimeMinutes: number;
     seed: number;
     scenarioId: string;
+    evidenceProfileId?: string;
 }

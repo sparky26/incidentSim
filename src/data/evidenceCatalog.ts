@@ -17,6 +17,10 @@ export interface EvidenceProfile {
     description: string;
     sources: EvidenceSource[];
     parameterOverrides: Partial<Record<BlockType, Partial<BlockConfig>>>;
+    runbookEffectiveness: {
+        responseDelay: number;
+        successProbability: number;
+    };
 }
 
 const mergeDerivedParameters = (sources: EvidenceSource[]) => {
@@ -127,6 +131,10 @@ export const EVIDENCE_PROFILES: EvidenceProfile[] = [
         description: 'Parameters tuned to academic incident response studies.',
         sources: ACADEMIC_SOURCES,
         parameterOverrides: mergeDerivedParameters(ACADEMIC_SOURCES),
+        runbookEffectiveness: {
+            responseDelay: 1.05,
+            successProbability: 1.1,
+        },
     },
     {
         id: 'evidence-industry-ops',
@@ -134,6 +142,10 @@ export const EVIDENCE_PROFILES: EvidenceProfile[] = [
         description: 'Parameters aligned with industry surveys and SLA benchmarks.',
         sources: INDUSTRY_SOURCES,
         parameterOverrides: mergeDerivedParameters(INDUSTRY_SOURCES),
+        runbookEffectiveness: {
+            responseDelay: 1.15,
+            successProbability: 1.2,
+        },
     },
     {
         id: 'evidence-sre-survey-ranges',
@@ -141,6 +153,10 @@ export const EVIDENCE_PROFILES: EvidenceProfile[] = [
         description: 'Empirical response-time ranges reported in SRE survey data.',
         sources: [INDUSTRY_SOURCES[1]],
         parameterOverrides: mergeDerivedParameters([INDUSTRY_SOURCES[1]]),
+        runbookEffectiveness: {
+            responseDelay: 1.0,
+            successProbability: 1.0,
+        },
     },
     {
         id: 'evidence-hybrid',
@@ -148,6 +164,10 @@ export const EVIDENCE_PROFILES: EvidenceProfile[] = [
         description: 'Blended evidence from both academic and industry sources.',
         sources: [...ACADEMIC_SOURCES, ...INDUSTRY_SOURCES],
         parameterOverrides: mergeDerivedParameters([...ACADEMIC_SOURCES, ...INDUSTRY_SOURCES]),
+        runbookEffectiveness: {
+            responseDelay: 1.1,
+            successProbability: 1.15,
+        },
     },
 ];
 
@@ -159,4 +179,14 @@ export const getEvidenceProfile = (profileId?: string) =>
 export const getEvidenceOverrides = (blockType: BlockType, profileId?: string) => {
     const profile = getEvidenceProfile(profileId);
     return profile?.parameterOverrides[blockType] ?? {};
+};
+
+export const getRunbookEffectiveness = (profileId?: string) => {
+    const profile = getEvidenceProfile(profileId);
+    return (
+        profile?.runbookEffectiveness ?? {
+            responseDelay: 1,
+            successProbability: 1,
+        }
+    );
 };

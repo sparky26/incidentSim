@@ -48,11 +48,17 @@ function App() {
         const engine = new SimulationEngine(ALL_BEHAVIORS);
         const NUM_RUNS = 100; // Default for v1
         const results = [];
+        const evidenceProfileIds = blocks
+          .map(block => (block.config as any)?.evidenceProfileId)
+          .filter(Boolean);
+        const uniqueEvidenceProfiles = Array.from(new Set(evidenceProfileIds));
+        const evidenceProfileId = uniqueEvidenceProfiles.length === 1 ? uniqueEvidenceProfiles[0] : 'mixed';
 
         console.time('Simulation');
         for (let i = 0; i < NUM_RUNS; i++) {
           const runResult = engine.run(blocks, connections, {
             ...simulationConfig,
+            evidenceProfileId,
             seed: simulationConfig.seed + i // Vary seed
           });
           results.push(runResult);
