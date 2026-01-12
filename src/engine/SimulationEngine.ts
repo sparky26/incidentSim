@@ -111,7 +111,8 @@ export class SimulationEngine {
                     timestamp: currentTimestamp + delay,
                     sourceBlockId: sourceBlockId ?? 'system', // or implicit
                     targetBlockId,
-                    data
+                    data,
+                    incidentId: data?.incidentId
                 }, currentTimestamp + delay);
             },
 
@@ -146,7 +147,8 @@ export class SimulationEngine {
                         timestamp: currentTimestamp + delayMinutes,
                         sourceBlockId: sourceBlockId ?? 'system',
                         targetBlockId,
-                        data
+                        data,
+                        incidentId: data?.incidentId
                     }, currentTimestamp + delayMinutes);
                 }
             },
@@ -175,7 +177,8 @@ export class SimulationEngine {
                             timestamp: currentTimestamp + delayMinutes,
                             sourceBlockId,
                             targetBlockId: targetId,
-                            data
+                            data,
+                            incidentId: data?.incidentId
                         }, currentTimestamp + delayMinutes);
                     }
                 });
