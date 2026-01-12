@@ -1,5 +1,17 @@
 import type { SimulationRunResult } from '../types/simulation';
 
+type IncidentPhase = 'detect' | 'alert' | 'page' | 'response' | 'total';
+
+interface PhaseDurationSummary {
+    average: number;
+    median: number;
+    p90: number;
+    histogram: Array<{ bucket: number; rangeLabel: string; count: number }>;
+    samples: number;
+    completionRate: number;
+    partialCount: number;
+}
+
 const T_CRITICAL_95: Record<number, number> = {
     1: 12.706,
     2: 4.303,
@@ -57,6 +69,173 @@ const standardDeviation = (values: number[]) => {
     return Math.sqrt(variance);
 };
 
+const buildHistogram = (values: number[]) => {
+    if (values.length === 0) {
+        return [] as Array<{ bucket: number; rangeLabel: string; count: number }>;
+    }
+
+    const sorted = [...values].sort((a, b) => a - b);
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    const range = max - min || 10;
+    const step = range / 10;
+
+    return Array.from({ length: 10 }).map((_, i) => {
+        const start = min + i * step;
+        const end = start + step;
+        const count = sorted.filter(value => value >= start && value < end).length;
+        return {
+            bucket: start + step / 2,
+            rangeLabel: `${Math.round(start)}-${Math.round(end)}m`,
+            count
+        };
+    });
+};
+
+const computeIncidentPhaseDurations = (run: SimulationRunResult) => {
+    const incidentEvents = new Map<string, typeof run.events>();
+    run.events.forEach(event => {
+        if (!event.incidentId) return;
+        const existing = incidentEvents.get(event.incidentId);
+        if (existing) {
+            existing.push(event);
+        } else {
+            incidentEvents.set(event.incidentId, [event]);
+        }
+    });
+
+    const phaseDurations: Record<IncidentPhase, number[]> = {
+        detect: [],
+        alert: [],
+        page: [],
+        response: [],
+        total: []
+    };
+    const phaseTotals: Record<IncidentPhase, { started: number; completed: number }> = {
+        detect: { started: 0, completed: 0 },
+        alert: { started: 0, completed: 0 },
+        page: { started: 0, completed: 0 },
+        response: { started: 0, completed: 0 },
+        total: { started: 0, completed: 0 }
+    };
+
+    incidentEvents.forEach(events => {
+        const timestamps: Record<string, number | undefined> = {};
+        [...events]
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .forEach(event => {
+                if (timestamps[event.type] === undefined) {
+                    timestamps[event.type] = event.timestamp;
+                }
+            });
+
+        const failureTime = timestamps.FAILURE_OCCURRED;
+        const signalTime = timestamps.SIGNAL_DETECTED;
+        if (failureTime !== undefined) {
+            phaseTotals.detect.started += 1;
+            if (signalTime !== undefined && signalTime >= failureTime) {
+                phaseDurations.detect.push(signalTime - failureTime);
+                phaseTotals.detect.completed += 1;
+            }
+        }
+
+        const alertTime = timestamps.ALERT_FIRED;
+        if (signalTime !== undefined) {
+            phaseTotals.alert.started += 1;
+            if (alertTime !== undefined && alertTime >= signalTime) {
+                phaseDurations.alert.push(alertTime - signalTime);
+                phaseTotals.alert.completed += 1;
+            }
+        }
+
+        const pageSentTime = timestamps.PAGE_SENT;
+        const pageAckTime = timestamps.PAGE_ACKNOWLEDGED;
+        if (alertTime !== undefined) {
+            phaseTotals.page.started += 1;
+            if (
+                pageSentTime !== undefined
+                && pageAckTime !== undefined
+                && pageSentTime >= alertTime
+                && pageAckTime >= pageSentTime
+            ) {
+                phaseDurations.page.push(pageAckTime - alertTime);
+                phaseTotals.page.completed += 1;
+            }
+        }
+
+        const actionStartTime = timestamps.ACTION_STARTED;
+        const actionCompleteTime = timestamps.ACTION_COMPLETED;
+        if (actionStartTime !== undefined) {
+            phaseTotals.response.started += 1;
+            if (actionCompleteTime !== undefined && actionCompleteTime >= actionStartTime) {
+                phaseDurations.response.push(actionCompleteTime - actionStartTime);
+                phaseTotals.response.completed += 1;
+            }
+        }
+
+        const incidentStartTime = timestamps.INCIDENT_STARTED;
+        const incidentResolvedTime = timestamps.INCIDENT_RESOLVED;
+        if (incidentStartTime !== undefined) {
+            phaseTotals.total.started += 1;
+            if (incidentResolvedTime !== undefined && incidentResolvedTime >= incidentStartTime) {
+                phaseDurations.total.push(incidentResolvedTime - incidentStartTime);
+                phaseTotals.total.completed += 1;
+            }
+        }
+    });
+
+    return { phaseDurations, phaseTotals };
+};
+
+export const aggregateIncidentPhaseMetrics = (results: SimulationRunResult[]) => {
+    const aggregatedDurations: Record<IncidentPhase, number[]> = {
+        detect: [],
+        alert: [],
+        page: [],
+        response: [],
+        total: []
+    };
+    const aggregatedTotals: Record<IncidentPhase, { started: number; completed: number }> = {
+        detect: { started: 0, completed: 0 },
+        alert: { started: 0, completed: 0 },
+        page: { started: 0, completed: 0 },
+        response: { started: 0, completed: 0 },
+        total: { started: 0, completed: 0 }
+    };
+
+    results.forEach(run => {
+        const { phaseDurations, phaseTotals } = computeIncidentPhaseDurations(run);
+        (Object.keys(phaseDurations) as IncidentPhase[]).forEach(phase => {
+            aggregatedDurations[phase].push(...phaseDurations[phase]);
+            aggregatedTotals[phase].started += phaseTotals[phase].started;
+            aggregatedTotals[phase].completed += phaseTotals[phase].completed;
+        });
+    });
+
+    const phases = (Object.keys(aggregatedDurations) as IncidentPhase[]).reduce(
+        (acc, phase) => {
+            const values = [...aggregatedDurations[phase]].sort((a, b) => a - b);
+            const samples = values.length;
+            const started = aggregatedTotals[phase].started;
+            const completed = aggregatedTotals[phase].completed;
+            const completionRate = started > 0 ? (completed / started) * 100 : 0;
+            acc[phase] = {
+                average: average(values),
+                median: percentile(values, 0.5),
+                p90: percentile(values, 0.9),
+                histogram: buildHistogram(values),
+                samples,
+                completionRate,
+                partialCount: Math.max(0, started - completed)
+            };
+            return acc;
+        },
+        {} as Record<IncidentPhase, PhaseDurationSummary>
+    );
+
+    return { phases };
+};
+
 export const aggregateSimulationResults = (results: SimulationRunResult[]) => {
     const successfulRuns = results.filter(run => run.success);
     const failedRuns = results.filter(run => !run.success);
@@ -100,21 +279,7 @@ export const aggregateSimulationResults = (results: SimulationRunResult[]) => {
         margin: mttrMargin
     } : null;
 
-    const min = resolvedTimes[0];
-    const max = resolvedTimes[resolvedTimes.length - 1];
-    const range = max - min || 10;
-    const step = range / 10;
-
-    const histogram = Array.from({ length: 10 }).map((_, i) => {
-        const start = min + i * step;
-        const end = start + step;
-        const count = resolvedTimes.filter(value => value >= start && value < end).length;
-        return {
-            bucket: start + step / 2,
-            rangeLabel: `${Math.round(start)}-${Math.round(end)}m`,
-            count
-        };
-    });
+    const histogram = buildHistogram(resolvedTimes);
 
     return {
         count: results.length,

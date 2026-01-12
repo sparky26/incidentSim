@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { getEvidenceProfile } from '../../data/evidenceCatalog';
-import { aggregateSimulationResults } from '../../utils/analytics';
+import { aggregateIncidentPhaseMetrics, aggregateSimulationResults } from '../../utils/analytics';
 
 const ResultsPanel = () => {
     const { results, setResults, simulationConfig } = useScenarioStore();
@@ -12,6 +12,11 @@ const ResultsPanel = () => {
     const stats = useMemo(() => {
         if (!results || results.length === 0) return null;
         return aggregateSimulationResults(results);
+    }, [results]);
+
+    const phaseStats = useMemo(() => {
+        if (!results || results.length === 0) return null;
+        return aggregateIncidentPhaseMetrics(results);
     }, [results]);
 
     if (!results || !stats) return null;
@@ -137,6 +142,52 @@ const ResultsPanel = () => {
                                 />
                             </BarChart>
                         </ResponsiveContainer>
+                    </div>
+
+                    {/* Incident Pipeline */}
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-700 mb-4">Incident Pipeline</h3>
+                        <div className="overflow-hidden border border-gray-200 rounded-lg">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left font-semibold">Phase</th>
+                                        <th className="px-4 py-2 text-right font-semibold">Median</th>
+                                        <th className="px-4 py-2 text-right font-semibold">P90</th>
+                                        <th className="px-4 py-2 text-right font-semibold">Average</th>
+                                        <th className="px-4 py-2 text-right font-semibold">Completion</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 text-gray-700">
+                                    {phaseStats && [
+                                        { key: 'detect', label: 'Detect (Failure → Signal)' },
+                                        { key: 'alert', label: 'Alert (Signal → Alert Fired)' },
+                                        { key: 'page', label: 'Page (Alert → Ack)' },
+                                        { key: 'response', label: 'Response (Action → Completed)' },
+                                        { key: 'total', label: 'Total (Incident → Resolved)' }
+                                    ].map(phase => {
+                                        const phaseSummary = phaseStats.phases[phase.key as keyof typeof phaseStats.phases];
+                                        const completion = phaseSummary.samples + phaseSummary.partialCount;
+                                        return (
+                                            <tr key={phase.key}>
+                                                <td className="px-4 py-2 font-medium text-gray-800">{phase.label}</td>
+                                                <td className="px-4 py-2 text-right">{Math.round(phaseSummary.median)}m</td>
+                                                <td className="px-4 py-2 text-right">{Math.round(phaseSummary.p90)}m</td>
+                                                <td className="px-4 py-2 text-right">{Math.round(phaseSummary.average)}m</td>
+                                                <td className="px-4 py-2 text-right text-xs text-gray-500">
+                                                    {completion > 0
+                                                        ? `${Math.round(phaseSummary.completionRate)}% (${phaseSummary.samples}/${completion})`
+                                                        : 'n/a'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            Completion rates exclude partial sequences where required events were missing.
+                        </p>
                     </div>
 
                     {/* Debug / Insights */}
