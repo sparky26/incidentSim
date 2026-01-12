@@ -78,7 +78,32 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
     isSimulating: false,
 
     loadTemplate: (nodes, edges) => {
-        set({ nodes, edges, results: null });
+        const normalizedNodes = nodes.map((node) => {
+            const type = node.type as BlockType | undefined;
+            if (!type || !(type in DEFAULT_CONFIGS)) {
+                return node;
+            }
+
+            const baseConfig = DEFAULT_CONFIGS[type];
+            const templateConfig = node.data ?? {};
+            const evidenceProfileId = (templateConfig as BlockConfig).evidenceProfileId ?? baseConfig.evidenceProfileId;
+            const evidenceOverrides = getEvidenceOverrides(type, evidenceProfileId);
+
+            const mergedConfig: BlockConfig = {
+                ...baseConfig,
+                ...evidenceOverrides,
+                ...templateConfig,
+                evidenceProfileId,
+            } as BlockConfig;
+
+            if (type === 'Signal' && (mergedConfig as any).metric === 'errors') {
+                (mergedConfig as any).metric = 'error_rate';
+            }
+
+            return { ...node, data: mergedConfig };
+        });
+
+        set({ nodes: normalizedNodes, edges, results: null });
     },
 
     onNodesChange: (changes) => {
