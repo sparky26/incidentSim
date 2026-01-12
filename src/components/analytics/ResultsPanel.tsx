@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useScenarioStore } from '../../store/scenarioStore';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, LineChart, Line } from 'recharts';
 import { getEvidenceProfile } from '../../data/evidenceCatalog';
 import { aggregateIncidentPhaseMetrics, aggregateSimulationResults, aggregateSimulationResultsBySegment, type SignalMetric } from '../../utils/analytics';
 
 const ResultsPanel = () => {
-    const { results, setResults, simulationConfig } = useScenarioStore();
+    const { results, setResults, simulationConfig, resultsHistory } = useScenarioStore();
     const evidenceProfileId = results?.[0]?.evidenceProfileId ?? simulationConfig.evidenceProfileId;
     const evidenceProfile = getEvidenceProfile(evidenceProfileId);
     const signalMetricLabels: Record<SignalMetric, string> = {
@@ -42,6 +42,7 @@ const ResultsPanel = () => {
 
     const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
     const [selectedMetrics, setSelectedMetrics] = useState<SignalMetric[]>([]);
+    const [selectedSweepKey, setSelectedSweepKey] = useState<string>('');
 
     useEffect(() => {
         setSelectedProfiles(availableProfiles);
@@ -50,6 +51,68 @@ const ResultsPanel = () => {
     useEffect(() => {
         setSelectedMetrics(availableMetrics);
     }, [availableMetrics]);
+
+    const compareEntries = useMemo(() => {
+        return resultsHistory.filter(entry => entry.scenarioId === simulationConfig.scenarioId && entry.parameter);
+    }, [resultsHistory, simulationConfig.scenarioId]);
+
+    const sweepOptions = useMemo(() => {
+        const unique = new Map<string, string>();
+        compareEntries.forEach(entry => {
+            if (!entry.parameter) {
+                return;
+            }
+            const key = `${entry.parameter.blockType}.${entry.parameter.configKey}`;
+            if (!unique.has(key)) {
+                unique.set(key, entry.parameter.label || key);
+            }
+        });
+        return Array.from(unique.entries()).map(([key, label]) => ({ key, label }));
+    }, [compareEntries]);
+
+    useEffect(() => {
+        if (sweepOptions.length === 0) {
+            setSelectedSweepKey('');
+            return;
+        }
+        if (!selectedSweepKey || !sweepOptions.find(option => option.key === selectedSweepKey)) {
+            setSelectedSweepKey(sweepOptions[0].key);
+        }
+    }, [selectedSweepKey, sweepOptions]);
+
+    const compareSeries = useMemo(() => {
+        if (!selectedSweepKey) {
+            return [];
+        }
+        const entries = compareEntries.filter(entry => entry.parameter
+            && `${entry.parameter.blockType}.${entry.parameter.configKey}` === selectedSweepKey);
+        const data = entries.map(entry => {
+            const summary = aggregateSimulationResults(entry.results);
+            return {
+                parameterValue: entry.parameter?.value ?? 0,
+                avgMTTR: summary.avgMTTR,
+                successRate: summary.successRate
+            };
+        }).sort((a, b) => a.parameterValue - b.parameterValue);
+
+        const baseline = data[0];
+        return data.map((point, index) => {
+            const mttrDeltaPercent = baseline && baseline.avgMTTR > 0
+                ? ((point.avgMTTR - baseline.avgMTTR) / baseline.avgMTTR) * 100
+                : 0;
+            const successRateDeltaPercent = baseline && baseline.successRate > 0
+                ? ((point.successRate - baseline.successRate) / baseline.successRate) * 100
+                : 0;
+            return {
+                ...point,
+                isBaseline: index === 0,
+                mttrDeltaPercent,
+                successRateDeltaPercent
+            };
+        });
+    }, [compareEntries, selectedSweepKey]);
+
+    const formatDelta = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
     const filteredSegments = useMemo(() => {
         if (!segmentedStats) return [];
@@ -92,7 +155,7 @@ const ResultsPanel = () => {
                         </p>
                     </div>
                     <button
-                        onClick={() => setResults(null as any)} // Close
+                        onClick={() => setResults(null)} // Close
                         className="text-gray-400 hover:text-gray-600 font-bold"
                     >
                         ✕
@@ -256,6 +319,83 @@ const ResultsPanel = () => {
                         </div>
                     </div>
 
+                    {/* Compare Panel */}
+                    <div className="p-4 border border-gray-200 rounded-lg bg-white space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-700">Compare MTTR vs Parameter</h3>
+                                <p className="text-xs text-gray-500">
+                                    Run a sweep to compare recovery times across configuration changes.
+                                </p>
+                            </div>
+                            <select
+                                className="text-xs border-gray-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                value={selectedSweepKey}
+                                onChange={(event) => setSelectedSweepKey(event.target.value)}
+                                disabled={sweepOptions.length === 0}
+                            >
+                                {sweepOptions.length === 0 ? (
+                                    <option value="">No sweeps yet</option>
+                                ) : (
+                                    sweepOptions.map(option => (
+                                        <option key={option.key} value={option.key}>{option.label}</option>
+                                    ))
+                                )}
+                            </select>
+                        </div>
+                        <div className="h-56">
+                            {compareSeries.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                                    No sweep data available for this scenario.
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={compareSeries}>
+                                        <XAxis dataKey="parameterValue" fontSize={11} stroke="#9CA3AF" />
+                                        <YAxis fontSize={11} stroke="#9CA3AF" />
+                                        <Tooltip
+                                            formatter={(value: number, name: string) => {
+                                                if (name === 'avgMTTR') {
+                                                    return [`${Math.round(value)}m`, 'Avg MTTR'];
+                                                }
+                                                if (name === 'successRate') {
+                                                    return [`${value.toFixed(1)}%`, 'Success Rate'];
+                                                }
+                                                return [value, name];
+                                            }}
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="avgMTTR"
+                                            stroke="#2563EB"
+                                            strokeWidth={2}
+                                            dot={{ r: 3 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+                        {compareSeries.length > 1 && (
+                            <div className="space-y-2 text-xs text-gray-600">
+                                <div className="font-semibold text-gray-700">Summary deltas vs baseline</div>
+                                {compareSeries.map(point => (
+                                    <div key={point.parameterValue} className="flex items-center justify-between rounded border border-gray-100 px-3 py-2">
+                                        <div className="text-gray-700 font-medium">Value {point.parameterValue}</div>
+                                        <div className="flex gap-4">
+                                            <span className={point.mttrDeltaPercent > 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                                                MTTR {formatDelta(point.mttrDeltaPercent)}
+                                            </span>
+                                            <span className={point.successRateDeltaPercent > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                                Success {formatDelta(point.successRateDeltaPercent)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Histogram */}
                     <div className="h-64">
                         <h3 className="text-sm font-bold text-gray-700 mb-4">Duration Distribution (Minutes)</h3>
@@ -356,7 +496,7 @@ const ResultsPanel = () => {
 
                 <div className="p-6 border-t bg-gray-50 rounded-b-lg flex justify-end">
                     <button
-                        onClick={() => setResults(null as any)}
+                        onClick={() => setResults(null)}
                         className="px-4 py-2 bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50 font-medium text-gray-700"
                     >
                         Close
