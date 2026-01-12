@@ -13,6 +13,7 @@ import {
 } from 'reactflow';
 import type { Block, BlockType, BlockConfig } from '../types/blocks';
 import type { SimulationConfig, SimulationRunResult } from '../types/simulation';
+import type { SimulationResultsHistoryEntry } from '../types/simulationBatch';
 import { v4 as uuidv4 } from 'uuid';
 import { isConnectionAllowed } from '../utils/connectionRules';
 import { DEFAULT_EVIDENCE_PROFILE_ID, getEvidenceOverrides } from '../data/evidenceCatalog';
@@ -46,6 +47,7 @@ interface ScenarioState {
     edges: Edge[];
     simulationConfig: SimulationConfig;
     results: SimulationRunResult[] | null;
+    resultsHistory: SimulationResultsHistoryEntry[];
     isSimulating: boolean;
 
     // Actions
@@ -55,7 +57,8 @@ interface ScenarioState {
     addBlock: (type: BlockType, position: { x: number, y: number }) => void;
     removeBlock: (id: string) => void;
     updateBlockConfig: (id: string, config: Partial<BlockConfig>) => void;
-    setResults: (results: SimulationRunResult[]) => void;
+    setResults: (results: SimulationRunResult[] | null) => void;
+    addResultsHistory: (entries: SimulationResultsHistoryEntry | SimulationResultsHistoryEntry[]) => void;
     setSimulating: (isSimulating: boolean) => void;
     loadTemplate: (nodes: Node<BlockConfig>[], edges: Edge[]) => void;
 }
@@ -70,6 +73,7 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
         evidenceProfileId: DEFAULT_EVIDENCE_PROFILE_ID
     },
     results: null,
+    resultsHistory: [],
     isSimulating: false,
 
     loadTemplate: (nodes, edges) => {
@@ -125,5 +129,9 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
         });
     },
     setResults: (results) => set({ results }),
+    addResultsHistory: (entries) => {
+        const nextEntries = Array.isArray(entries) ? entries : [entries];
+        set({ resultsHistory: [...get().resultsHistory, ...nextEntries] });
+    },
     setSimulating: (isSimulating) => set({ isSimulating }),
 }));
