@@ -18,29 +18,35 @@ import { v4 as uuidv4 } from 'uuid';
 import { isConnectionAllowed } from '../utils/connectionRules';
 import { DEFAULT_EVIDENCE_PROFILE_ID, getEvidenceOverrides } from '../data/evidenceCatalog';
 
-// Default configs for new blocks
-const buildDefaultConfig = <T extends BlockConfig>(type: BlockType, config: T): T => ({
-    ...config,
-    evidenceProfileId: DEFAULT_EVIDENCE_PROFILE_ID,
-    ...getEvidenceOverrides(type, DEFAULT_EVIDENCE_PROFILE_ID),
+const BASE_DEFAULT_CONFIGS: Record<BlockType, BlockConfig> = {
+    'Service': { label: 'New Service', baseFailureRate: 0.001, recoveryRate: 0.1 } as any,
+    'Dependency': { label: 'Dependency', type: 'hard', impact: 1 } as any,
+    'Vendor': { label: 'Vendor', outageProbability: 0.001, slaResponseTime: 60 } as any,
+    'Traffic': { label: 'Traffic', baselineRequestRate: 100, spikeProbability: 0.01, spikeMultiplier: 5 } as any,
+    'Deployment': { label: 'Deploy', risk: 0.2, canary: false, automated: true, frequencyMinutes: 60 } as any,
+    'Signal': { label: 'Signal', metric: 'latency', detectionDelayMean: 1, detectionDelayStdDev: 0.2, signalToNoiseRatio: 0.95 } as any,
+    'AlertRule': { label: 'Alert Rule', threshold: 1, durationMinutes: 5 } as any,
+    'OnCall': { label: 'OnCall', scheduleId: 'default', handoverProtocol: 'weak' } as any,
+    'Escalation': { label: 'Escalation', steps: [] } as any,
+    'Responder': { label: 'Responder', baseResponseTimeMean: 10, baseResponseTimeStdDev: 3, fatigueSensitivity: 0.1, shiftLengthHours: 8 } as any,
+    'Commander': { label: 'Commander', experienceLevel: 5, coordinationBonus: 0.2 } as any,
+    'CommChannel': { label: 'Slack', latency: 0.1, contextLossProb: 0.01 } as any,
+    'Runbook': { label: 'SOP', quality: 0.8, isOutdated: false, automated: false } as any,
+    'Action': { label: 'Action', requiredSkill: '', durationMean: 15, durationStdDev: 4, successProbability: 0.9, isRollback: false } as any,
+};
+
+const buildDefaultConfig = (type: BlockType, profileId: string): BlockConfig => ({
+    ...BASE_DEFAULT_CONFIGS[type],
+    evidenceProfileId: profileId,
+    ...getEvidenceOverrides(type, profileId),
 });
 
-const DEFAULT_CONFIGS: Record<BlockType, BlockConfig> = {
-    'Service': buildDefaultConfig('Service', { label: 'New Service', baseFailureRate: 0.001, recoveryRate: 0.1 } as any),
-    'Dependency': buildDefaultConfig('Dependency', { label: 'Dependency', type: 'hard', impact: 1 } as any),
-    'Vendor': buildDefaultConfig('Vendor', { label: 'Vendor', outageProbability: 0.001, slaResponseTime: 60 } as any),
-    'Traffic': buildDefaultConfig('Traffic', { label: 'Traffic', baselineRequestRate: 100, spikeProbability: 0.01, spikeMultiplier: 5 } as any),
-    'Deployment': buildDefaultConfig('Deployment', { label: 'Deploy', risk: 0.2, canary: false, automated: true, frequencyMinutes: 60 } as any),
-    'Signal': buildDefaultConfig('Signal', { label: 'Signal', metric: 'latency', detectionDelayMean: 1, detectionDelayStdDev: 0.2, signalToNoiseRatio: 0.95 } as any),
-    'AlertRule': buildDefaultConfig('AlertRule', { label: 'Alert Rule', threshold: 1, durationMinutes: 5 } as any),
-    'OnCall': buildDefaultConfig('OnCall', { label: 'OnCall', scheduleId: 'default', handoverProtocol: 'weak' } as any),
-    'Escalation': buildDefaultConfig('Escalation', { label: 'Escalation', steps: [] } as any),
-    'Responder': buildDefaultConfig('Responder', { label: 'Responder', baseResponseTimeMean: 10, baseResponseTimeStdDev: 3, fatigueSensitivity: 0.1, shiftLengthHours: 8 } as any),
-    'Commander': buildDefaultConfig('Commander', { label: 'Commander', experienceLevel: 5, coordinationBonus: 0.2 } as any),
-    'CommChannel': buildDefaultConfig('CommChannel', { label: 'Slack', latency: 0.1, contextLossProb: 0.01 } as any),
-    'Runbook': buildDefaultConfig('Runbook', { label: 'SOP', quality: 0.8, isOutdated: false, automated: false } as any),
-    'Action': buildDefaultConfig('Action', { label: 'Action', requiredSkill: '', durationMean: 15, durationStdDev: 4, successProbability: 0.9, isRollback: false } as any),
-};
+const DEFAULT_CONFIGS: Record<BlockType, BlockConfig> = Object.fromEntries(
+    Object.keys(BASE_DEFAULT_CONFIGS).map((type) => [
+        type,
+        buildDefaultConfig(type as BlockType, DEFAULT_EVIDENCE_PROFILE_ID),
+    ])
+) as Record<BlockType, BlockConfig>;
 
 interface ScenarioState {
     nodes: Node<BlockConfig>[];
@@ -84,9 +90,9 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
                 return node;
             }
 
-            const baseConfig = DEFAULT_CONFIGS[type];
             const templateConfig = node.data ?? {};
-            const evidenceProfileId = (templateConfig as BlockConfig).evidenceProfileId ?? baseConfig.evidenceProfileId;
+            const evidenceProfileId = (templateConfig as BlockConfig).evidenceProfileId ?? DEFAULT_EVIDENCE_PROFILE_ID;
+            const baseConfig = BASE_DEFAULT_CONFIGS[type];
             const evidenceOverrides = getEvidenceOverrides(type, evidenceProfileId);
 
             const mergedConfig: BlockConfig = {
