@@ -1,9 +1,12 @@
 import React, { useMemo } from 'react';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { getEvidenceProfile } from '../../data/evidenceCatalog';
 
 const ResultsPanel = () => {
-    const { results, setResults } = useScenarioStore();
+    const { results, setResults, simulationConfig } = useScenarioStore();
+    const evidenceProfileId = results?.[0]?.evidenceProfileId ?? simulationConfig.evidenceProfileId;
+    const evidenceProfile = getEvidenceProfile(evidenceProfileId);
 
     const stats = useMemo(() => {
         if (!results || results.length === 0) return null;
@@ -54,6 +57,12 @@ const ResultsPanel = () => {
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Simulation Results</h2>
                         <p className="text-sm text-gray-500">Analysis of {stats.count} runs</p>
+                        <p className="text-xs text-gray-500">
+                            Evidence profile:{' '}
+                            <span className="font-medium text-gray-700">
+                                {evidenceProfile?.name ?? (evidenceProfileId ? evidenceProfileId : 'Unspecified')}
+                            </span>
+                        </p>
                     </div>
                     <button
                         onClick={() => setResults(null as any)} // Close

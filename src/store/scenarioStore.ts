@@ -66,7 +66,8 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
     simulationConfig: {
         maxTimeMinutes: 240, // 4 hours
         seed: 12345,
-        scenarioId: 'draft'
+        scenarioId: 'draft',
+        evidenceProfileId: DEFAULT_EVIDENCE_PROFILE_ID
     },
     results: null,
     isSimulating: false,

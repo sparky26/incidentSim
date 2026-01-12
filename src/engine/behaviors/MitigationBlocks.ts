@@ -1,6 +1,7 @@
 import { BlockBehavior, SimulationContext } from '../SimulationEngine';
 import { Block, ActionConfig, CommanderConfig } from '../../types/blocks';
 import { SimulationEvent } from '../../types/simulation';
+import { getRunbookEffectiveness } from '../../data/evidenceCatalog';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -41,6 +42,7 @@ export const ActionBehavior: BlockBehavior = {
 
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
         const config = block.config as ActionConfig;
+        const runbookEffectiveness = getRunbookEffectiveness(config.evidenceProfileId);
 
         if (event.type === 'ACTION_STARTED') {
             const runbookQuality = event.data?.runbookQuality ?? 0;
@@ -50,7 +52,7 @@ export const ActionBehavior: BlockBehavior = {
 
             let durationMean = config.durationMean;
             let durationStdDev = config.durationStdDev;
-            const runbookModifier = 1 - runbookQuality * 0.3;
+            const runbookModifier = 1 - runbookQuality * 0.3 * runbookEffectiveness.responseDelay;
             const runbookPenaltyModifier = 1 + runbookPenalty;
             const commanderModifier = 1 - commanderBonus * 0.2;
 
@@ -68,7 +70,7 @@ export const ActionBehavior: BlockBehavior = {
             const commanderBonus = findCommanderBonus(block.id, ctx, severity);
 
             let successProbability = config.successProbability;
-            successProbability += runbookQuality * 0.2;
+            successProbability += runbookQuality * 0.2 * runbookEffectiveness.successProbability;
             successProbability -= runbookPenalty;
             successProbability += commanderBonus * 0.2;
             successProbability = clamp(successProbability, 0, 1);

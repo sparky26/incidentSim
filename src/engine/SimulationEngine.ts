@@ -291,6 +291,7 @@ export class SimulationEngine {
             events: eventLog,
             finalTime: currentTimestamp,
             success,
+            evidenceProfileId: config.evidenceProfileId,
             metrics: {
                 customerImpactMinutes,
                 incidentCount: totalIncidents,
