@@ -1,13 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useScenarioStore } from '../../store/scenarioStore';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import { getEvidenceProfile } from '../../data/evidenceCatalog';
-import { aggregateIncidentPhaseMetrics, aggregateSimulationResults } from '../../utils/analytics';
+import { aggregateIncidentPhaseMetrics, aggregateSimulationResults, aggregateSimulationResultsBySegment, type SignalMetric } from '../../utils/analytics';
 
 const ResultsPanel = () => {
     const { results, setResults, simulationConfig } = useScenarioStore();
     const evidenceProfileId = results?.[0]?.evidenceProfileId ?? simulationConfig.evidenceProfileId;
     const evidenceProfile = getEvidenceProfile(evidenceProfileId);
+    const signalMetricLabels: Record<SignalMetric, string> = {
+        latency: 'Latency',
+        error_rate: 'Error Rate',
+        saturation: 'Saturation',
+        unknown: 'Unknown'
+    };
 
     const stats = useMemo(() => {
         if (!results || results.length === 0) return null;
@@ -19,7 +25,57 @@ const ResultsPanel = () => {
         return aggregateIncidentPhaseMetrics(results);
     }, [results]);
 
+    const segmentedStats = useMemo(() => {
+        if (!results || results.length === 0) return null;
+        return aggregateSimulationResultsBySegment(results);
+    }, [results]);
+
+    const availableProfiles = useMemo(() => {
+        if (!segmentedStats) return [];
+        return Array.from(new Set(segmentedStats.map(segment => segment.evidenceProfileId)));
+    }, [segmentedStats]);
+
+    const availableMetrics = useMemo(() => {
+        if (!segmentedStats) return [];
+        return Array.from(new Set(segmentedStats.map(segment => segment.signalMetric)));
+    }, [segmentedStats]);
+
+    const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
+    const [selectedMetrics, setSelectedMetrics] = useState<SignalMetric[]>([]);
+
+    useEffect(() => {
+        setSelectedProfiles(availableProfiles);
+    }, [availableProfiles]);
+
+    useEffect(() => {
+        setSelectedMetrics(availableMetrics);
+    }, [availableMetrics]);
+
+    const filteredSegments = useMemo(() => {
+        if (!segmentedStats) return [];
+        return segmentedStats.filter(segment =>
+            selectedProfiles.includes(segment.evidenceProfileId)
+            && selectedMetrics.includes(segment.signalMetric)
+        );
+    }, [segmentedStats, selectedProfiles, selectedMetrics]);
+
+    const segmentedChartData = useMemo(() => {
+        const grouped = new Map<string, { profileId: string; profileLabel: string } & Record<string, number>>();
+        filteredSegments.forEach(segment => {
+            const profileId = segment.evidenceProfileId;
+            const profileLabel = getEvidenceProfile(profileId)?.name
+                ?? (profileId === 'unspecified' ? 'Unspecified' : profileId);
+            const existing = grouped.get(profileId) ?? { profileId, profileLabel };
+            existing[segment.signalMetric] = Math.round(segment.stats.avgMTTR);
+            grouped.set(profileId, existing);
+        });
+        return Array.from(grouped.values());
+    }, [filteredSegments]);
+
     if (!results || !stats) return null;
+
+    const orderedMetrics = ['latency', 'error_rate', 'saturation', 'unknown'] as const;
+    const metricsToDisplay = orderedMetrics.filter(metric => selectedMetrics.includes(metric));
 
     return (
         <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center animate-in fade-in">
@@ -100,6 +156,103 @@ const ResultsPanel = () => {
                                     ? `95% CI ±${stats.mttrCi.margin.toFixed(1)}m (${Math.round(stats.mttrCi.lower)}-${Math.round(stats.mttrCi.upper)}m)`
                                     : '95% CI unavailable (insufficient samples)'}
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Segmented Summary */}
+                    <div className="p-4 border border-gray-200 rounded-lg bg-white space-y-4">
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-700">Segmented MTTR (Avg)</h3>
+                            <p className="text-xs text-gray-500">
+                                Compare mean recovery times by evidence profile and signal metric.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-6 text-xs text-gray-600">
+                            <div className="space-y-2">
+                                <div className="font-semibold text-gray-700">Evidence profiles</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableProfiles.map(profileId => {
+                                        const label = getEvidenceProfile(profileId)?.name
+                                            ?? (profileId === 'unspecified' ? 'Unspecified' : profileId);
+                                        const checked = selectedProfiles.includes(profileId);
+                                        return (
+                                            <label
+                                                key={profileId}
+                                                className={`flex items-center gap-2 rounded border px-2 py-1 ${checked ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-blue-600"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        setSelectedProfiles(prev =>
+                                                            prev.includes(profileId)
+                                                                ? prev.filter(value => value !== profileId)
+                                                                : [...prev, profileId]
+                                                        );
+                                                    }}
+                                                />
+                                                <span>{label}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="font-semibold text-gray-700">Signal metrics</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {orderedMetrics.filter(metric => availableMetrics.includes(metric)).map(metric => {
+                                        const checked = selectedMetrics.includes(metric);
+                                        return (
+                                            <label
+                                                key={metric}
+                                                className={`flex items-center gap-2 rounded border px-2 py-1 ${checked ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-600'}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-emerald-600"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        setSelectedMetrics(prev =>
+                                                            prev.includes(metric)
+                                                                ? prev.filter(value => value !== metric)
+                                                                : [...prev, metric]
+                                                        );
+                                                    }}
+                                                />
+                                                <span>{signalMetricLabels[metric]}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="h-64">
+                            {segmentedChartData.length === 0 || metricsToDisplay.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                                    Select at least one segment to display the chart.
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={segmentedChartData}>
+                                        <XAxis dataKey="profileLabel" fontSize={11} stroke="#9CA3AF" />
+                                        <YAxis fontSize={11} stroke="#9CA3AF" />
+                                        <Tooltip
+                                            formatter={(value: number, name: string) => [`${value}m`, signalMetricLabels[name as SignalMetric] ?? name]}
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        />
+                                        <Legend formatter={(value: string) => signalMetricLabels[value as SignalMetric] ?? value} />
+                                        {metricsToDisplay.map(metric => (
+                                            <Bar
+                                                key={metric}
+                                                dataKey={metric}
+                                                fill={metric === 'latency' ? '#38BDF8' : metric === 'error_rate' ? '#FB7185' : metric === 'saturation' ? '#34D399' : '#CBD5F5'}
+                                                radius={[4, 4, 0, 0]}
+                                            />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
                         </div>
                     </div>
 

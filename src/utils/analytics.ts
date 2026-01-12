@@ -1,5 +1,7 @@
 import type { SimulationRunResult } from '../types/simulation';
 
+export type SignalMetric = 'latency' | 'error_rate' | 'saturation' | 'unknown';
+
 type IncidentPhase = 'detect' | 'alert' | 'page' | 'response' | 'total';
 
 interface PhaseDurationSummary {
@@ -90,6 +92,23 @@ const buildHistogram = (values: number[]) => {
             count
         };
     });
+};
+
+const extractSignalMetrics = (run: SimulationRunResult): SignalMetric[] => {
+    const metrics = new Set<SignalMetric>();
+    run.events.forEach(event => {
+        if (event.type !== 'SIGNAL_DETECTED') return;
+        const metric = event.data?.metric;
+        if (metric === 'latency' || metric === 'error_rate' || metric === 'saturation') {
+            metrics.add(metric);
+        }
+    });
+
+    if (metrics.size === 0) {
+        metrics.add('unknown');
+    }
+
+    return Array.from(metrics);
 };
 
 const computeIncidentPhaseDurations = (run: SimulationRunResult) => {
@@ -296,4 +315,32 @@ export const aggregateSimulationResults = (results: SimulationRunResult[]) => {
         histogram,
         failedRuns: failedRuns.length
     };
+};
+
+export const aggregateSimulationResultsBySegment = (results: SimulationRunResult[]) => {
+    const segments = new Map<
+        string,
+        { evidenceProfileId: string; signalMetric: SignalMetric; runs: SimulationRunResult[] }
+    >();
+
+    results.forEach(run => {
+        const evidenceProfileId = run.evidenceProfileId ?? 'unspecified';
+        const signalMetrics = extractSignalMetrics(run);
+
+        signalMetrics.forEach(signalMetric => {
+            const key = `${evidenceProfileId}::${signalMetric}`;
+            const existing = segments.get(key);
+            if (existing) {
+                existing.runs.push(run);
+            } else {
+                segments.set(key, { evidenceProfileId, signalMetric, runs: [run] });
+            }
+        });
+    });
+
+    return Array.from(segments.values()).map(segment => ({
+        evidenceProfileId: segment.evidenceProfileId,
+        signalMetric: segment.signalMetric,
+        stats: aggregateSimulationResults(segment.runs)
+    }));
 };
