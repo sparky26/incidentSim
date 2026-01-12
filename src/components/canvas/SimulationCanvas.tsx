@@ -4,7 +4,7 @@ import ReactFlow, {
     Controls,
     MiniMap,
 } from 'reactflow';
-import type { Connection, NodeTypes } from 'reactflow';
+import type { Connection, Edge, NodeTypes } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useScenarioStore } from '../../store/scenarioStore';
 import BlockNode from '../nodes/BlockNode';
@@ -36,7 +36,8 @@ const SimulationCanvas = () => {
         onNodesChange,
         onEdgesChange,
         onConnect,
-        addBlock
+        addBlock,
+        removeEdge
     } = useScenarioStore();
 
     const nodeTypeById = useMemo(() => {
@@ -80,6 +81,14 @@ const SimulationCanvas = () => {
         [addBlock]
     );
 
+    const onEdgeContextMenu = useCallback(
+        (event: React.MouseEvent, edge: Edge) => {
+            event.preventDefault();
+            removeEdge(edge.id);
+        },
+        [removeEdge]
+    );
+
     return (
         <div className="w-full h-full" onDragOver={onDragOver} onDrop={onDrop}>
             <ReactFlow
@@ -88,6 +97,7 @@ const SimulationCanvas = () => {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onEdgeContextMenu={onEdgeContextMenu}
                 isValidConnection={isValidConnection}
                 nodeTypes={nodeTypes}
                 fitView

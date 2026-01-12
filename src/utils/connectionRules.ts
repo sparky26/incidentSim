@@ -10,9 +10,9 @@ const CONNECTION_RULES: Record<BlockType, BlockType[]> = {
   AlertRule: ['OnCall', 'Escalation'],
   OnCall: ['Responder', 'CommChannel'],
   Escalation: ['OnCall'],
-  Responder: ['Action', 'CommChannel'],
+  Responder: ['Action'],
   Commander: ['Responder', 'CommChannel'],
-  CommChannel: [],
+  CommChannel: ['Responder'],
   Runbook: ['AlertRule'],
   Action: ['Service'],
 };
