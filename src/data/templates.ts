@@ -15,7 +15,7 @@ export const TEMPLATES: Template[] = [
         nodes: [
             { id: 'srv-1', type: 'Service', position: { x: 100, y: 100 }, data: { label: 'Auth Service', baseFailureRate: 0.1, recoveryRate: 0.0 } as any },
             { id: 'sig-1', type: 'Signal', position: { x: 100, y: 250 }, data: { label: 'Error Rate', metric: 'error_rate', detectionDelayMean: 2, detectionDelayStdDev: 0.5 } as any },
-            { id: 'alert-1', type: 'AlertRule', position: { x: 100, y: 400 }, data: { label: 'High Errors', threshold: 5, durationMinutes: 2 } as any },
+            { id: 'alert-1', type: 'AlertRule', position: { x: 100, y: 400 }, data: { label: 'High Errors', threshold: 1, durationMinutes: 2 } as any },
             { id: 'oncall-1', type: 'OnCall', position: { x: 300, y: 400 }, data: { label: 'Night Shift', scheduleId: 'night' } as any },
             { id: 'person-1', type: 'Responder', position: { x: 300, y: 550 }, data: { label: 'Junior Dev (Sleepy)', baseResponseTimeMean: 15, baseResponseTimeStdDev: 4, fatigueSensitivity: 2, skillTags: ['backend'] } as any },
             { id: 'act-1', type: 'Action', position: { x: 100, y: 550 }, data: { label: 'Rollback', requiredSkill: 'backend', durationMean: 10, durationStdDev: 3, successProbability: 0.8, isRollback: true } as any },
@@ -33,7 +33,7 @@ export const TEMPLATES: Template[] = [
         name: 'Third-Party Vendor Outage',
         description: 'A critical dependency goes down, SLA is breached.',
         nodes: [
-            { id: 'vend-1', type: 'Vendor', position: { x: 100, y: 50 }, data: { label: 'Payment API', outageProbability: 0.05, slaResponseTime: 45 } as any },
+            { id: 'vend-1', type: 'Vendor', position: { x: 100, y: 50 }, data: { label: 'Payment API', outageProbability: 0.4, slaResponseTime: 45 } as any },
             { id: 'dep-1', type: 'Dependency', position: { x: 100, y: 125 }, data: { label: 'API Link', type: 'hard', impact: 1 } as any },
             { id: 'srv-main', type: 'Service', position: { x: 100, y: 200 }, data: { label: 'Checkout Service', baseFailureRate: 0, recoveryRate: 1 } as any },
             { id: 'sig-1', type: 'Signal', position: { x: 300, y: 200 }, data: { label: 'Checkout Failures', metric: 'error_rate' } as any },
@@ -66,7 +66,7 @@ export const TEMPLATES: Template[] = [
             { id: 'be-1', type: 'Service', position: { x: 50, y: 350 }, data: { label: 'Backend', baseFailureRate: 0.01 } as any },
             { id: 'dep-1', type: 'Dependency', position: { x: 50, y: 275 }, data: { label: 'RPC', type: 'hard', impact: 1 } as any },
             { id: 'sig-1', type: 'Signal', position: { x: 260, y: 350 }, data: { label: 'Backend Errors', metric: 'error_rate' } as any },
-            { id: 'alert-1', type: 'AlertRule', position: { x: 460, y: 350 }, data: { label: 'Backend Alert', threshold: 5, durationMinutes: 2 } as any },
+            { id: 'alert-1', type: 'AlertRule', position: { x: 460, y: 350 }, data: { label: 'Backend Alert', threshold: 1, durationMinutes: 2 } as any },
             { id: 'runbook-1', type: 'Runbook', position: { x: 460, y: 260 }, data: { label: 'Scale Playbook', quality: 0.8, isOutdated: false, automated: false } as any },
             { id: 'oncall-1', type: 'OnCall', position: { x: 460, y: 470 }, data: { label: 'Traffic OnCall', scheduleId: 'primary' } as any },
             { id: 'responder-1', type: 'Responder', position: { x: 460, y: 590 }, data: { label: 'SRE Responder', baseResponseTimeMean: 6, baseResponseTimeStdDev: 1.5, fatigueSensitivity: 0.15, skillTags: ['scaling'] } as any },
