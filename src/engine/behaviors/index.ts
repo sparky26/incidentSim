@@ -3,6 +3,7 @@ import { ServiceBehavior, DependencyBehavior, TrafficBehavior, VendorBehavior, D
 import { SignalBehavior, AlertRuleBehavior, EscalationBehavior, OnCallBehavior } from './DetectionBlocks';
 import { ResponderBehavior, CommanderBehavior, CommChannelBehavior } from './HumanBlocks';
 import { ActionBehavior } from './MitigationBlocks';
+import { RunbookBehavior } from './ProcessBlocks';
 
 export const ALL_BEHAVIORS: Record<string, BlockBehavior> = {
     'Service': ServiceBehavior,
@@ -16,7 +17,7 @@ export const ALL_BEHAVIORS: Record<string, BlockBehavior> = {
     'OnCall': OnCallBehavior,
     'Responder': ResponderBehavior,
     'Commander': CommanderBehavior,
-    'CommChannel': { initialize: (b) => { }, processEvent: () => { } },
-    'Runbook': { initialize: (b) => { }, processEvent: () => { } }, // Passive block
+    'CommChannel': CommChannelBehavior,
+    'Runbook': RunbookBehavior,
     'Action': ActionBehavior
 };

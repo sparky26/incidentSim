@@ -35,7 +35,8 @@ export interface SimulationContext {
         type: SimulationEvent['type'],
         delayMinutes: number,
         targetBlockId?: string,
-        data?: any
+        data?: any,
+        sourceBlockId?: string
     ): void;
 
     // Helper to emit immediate events
@@ -44,6 +45,19 @@ export interface SimulationContext {
     // Access other blocks (read-only config)
     getBlock(id: string): Block | undefined;
     getConnections(sourceId: string): string[]; // returns target IDs
+    routeEvent(
+        targetBlockId: string,
+        type: SimulationEvent['type'],
+        delayMinutes: number,
+        data?: any,
+        sourceBlockId?: string
+    ): void;
+    routeToConnections(
+        sourceBlockId: string,
+        type: SimulationEvent['type'],
+        delayMinutes: number,
+        data?: any
+    ): void;
 
     // Raw access for graph traversal
     connections: { source: string; target: string }[];
@@ -85,17 +99,17 @@ export class SimulationEngine {
         // Context Factory
         const createCtx = (): SimulationContext => ({
             random,
-            timestamp: currentTimestamp, // closure captures current ref? No, primitive. Need getter.
+            timestamp: currentTimestamp,
             params: config,
             state,
             events: pq,
 
-            schedule: (type, delay, targetBlockId, data) => {
+            schedule: (type, delay, targetBlockId, data, sourceBlockId) => {
                 pq.push({
                     id: uuidv4(),
                     type,
                     timestamp: currentTimestamp + delay,
-                    sourceBlockId: 'system', // or implicit
+                    sourceBlockId: sourceBlockId ?? 'system', // or implicit
                     targetBlockId,
                     data
                 }, currentTimestamp + delay);
@@ -109,6 +123,63 @@ export class SimulationEngine {
 
             getBlock: (id) => blockMap.get(id),
             getConnections: (id) => connectionMap.get(id) || [],
+            routeEvent: (targetBlockId, type, delayMinutes, data, sourceBlockId) => {
+                const target = blockMap.get(targetBlockId);
+                if (!target) return;
+                if (target.type === 'CommChannel') {
+                    pq.push({
+                        id: uuidv4(),
+                        type: 'COMM_MESSAGE',
+                        timestamp: currentTimestamp + delayMinutes,
+                        sourceBlockId: sourceBlockId ?? 'system',
+                        targetBlockId,
+                        data: {
+                            forwardedType: type,
+                            forwardedData: data,
+                            originalSourceId: sourceBlockId ?? 'system'
+                        }
+                    }, currentTimestamp + delayMinutes);
+                } else {
+                    pq.push({
+                        id: uuidv4(),
+                        type,
+                        timestamp: currentTimestamp + delayMinutes,
+                        sourceBlockId: sourceBlockId ?? 'system',
+                        targetBlockId,
+                        data
+                    }, currentTimestamp + delayMinutes);
+                }
+            },
+            routeToConnections: (sourceBlockId, type, delayMinutes, data) => {
+                const targets = connectionMap.get(sourceBlockId) || [];
+                targets.forEach(targetId => {
+                    const target = blockMap.get(targetId);
+                    if (!target) return;
+                    if (target.type === 'CommChannel') {
+                        pq.push({
+                            id: uuidv4(),
+                            type: 'COMM_MESSAGE',
+                            timestamp: currentTimestamp + delayMinutes,
+                            sourceBlockId,
+                            targetBlockId: targetId,
+                            data: {
+                                forwardedType: type,
+                                forwardedData: data,
+                                originalSourceId: sourceBlockId
+                            }
+                        }, currentTimestamp + delayMinutes);
+                    } else {
+                        pq.push({
+                            id: uuidv4(),
+                            type,
+                            timestamp: currentTimestamp + delayMinutes,
+                            sourceBlockId,
+                            targetBlockId: targetId,
+                            data
+                        }, currentTimestamp + delayMinutes);
+                    }
+                });
+            },
             connections: connections // Pass through
         });
 
@@ -151,20 +222,7 @@ export class SimulationEngine {
 
             currentTimestamp = event.timestamp;
 
-            // Update ctx timestamp access
-            // We need a stable context object but with updated timestamp.
-            // Or just pass timestamp to processEvent. 
-            // Let's use a mutable context wrapper or just update a shared var?
-            // "timestamp" in interface is generic number. 
-            // Properly, we should pass `currentTimestamp` to `processEvent`.
-            // But for simplicity let's assume ctx.timestamp is updated if we assigned it to a property of an object we pass.
-            // Actually `createCtx` returned a new object with fixed timestamp 0. This is a BUG.
-
-            // FIX: Context should be a single instance with mutable timestamp.
-            const loopCtx = {
-                ...createCtx(),
-                timestamp: currentTimestamp
-            };
+            ctx.timestamp = currentTimestamp;
 
             eventLog.push(event);
 
@@ -194,7 +252,7 @@ export class SimulationEngine {
                 if (targetBlock) {
                     const behavior = this.behaviors.get(targetBlock.type);
                     if (behavior) {
-                        behavior.processEvent(event, targetBlock, loopCtx);
+                        behavior.processEvent(event, targetBlock, ctx);
                     }
                 }
             } else {
