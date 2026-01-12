@@ -17,6 +17,7 @@ const nodeTypes: NodeTypes = {
     'Dependency': BlockNode,
     'Vendor': BlockNode,
     'Traffic': BlockNode,
+    'Deployment': BlockNode,
     'Signal': BlockNode,
     'AlertRule': BlockNode,
     'Escalation': BlockNode,
@@ -24,6 +25,7 @@ const nodeTypes: NodeTypes = {
     'Responder': BlockNode,
     'Commander': BlockNode,
     'CommChannel': BlockNode,
+    'Runbook': BlockNode,
     'Action': BlockNode,
 };
 

@@ -3,7 +3,7 @@ import type { BlockType } from '../types/blocks';
 const CONNECTION_RULES: Record<BlockType, BlockType[]> = {
   Service: ['Signal', 'Dependency'],
   Dependency: ['Service', 'Dependency'],
-  Vendor: ['Service'],
+  Vendor: ['Service', 'Dependency'],
   Traffic: ['Service'],
   Deployment: ['Service'],
   Signal: ['AlertRule'],
