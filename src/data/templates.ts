@@ -113,7 +113,7 @@ export const TEMPLATES: Template[] = [
             { id: 'e8', source: 'oncall-1', target: 'comm-1' },
             { id: 'e9', source: 'oncall-2', target: 'comm-1' },
             { id: 'e10', source: 'commander-1', target: 'comm-1' },
-            { id: 'e11', source: 'responder-1', target: 'comm-1' },
+            { id: 'e11', source: 'comm-1', target: 'responder-1' },
             { id: 'e12', source: 'responder-1', target: 'action-1' },
             { id: 'e13', source: 'action-1', target: 'svc-1' },
         ]
@@ -145,7 +145,7 @@ export const TEMPLATES: Template[] = [
             { id: 'e7', source: 'alert-1', target: 'oncall-1' },
             { id: 'e8', source: 'oncall-1', target: 'comm-1' },
             { id: 'e9', source: 'commander-1', target: 'comm-1' },
-            { id: 'e10', source: 'responder-1', target: 'comm-1' },
+            { id: 'e10', source: 'comm-1', target: 'responder-1' },
             { id: 'e11', source: 'responder-1', target: 'action-1' },
             { id: 'e12', source: 'action-1', target: 'svc-1' },
         ]

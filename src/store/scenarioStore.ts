@@ -56,6 +56,7 @@ interface ScenarioState {
     onConnect: (connection: Connection) => void;
     addBlock: (type: BlockType, position: { x: number, y: number }) => void;
     removeBlock: (id: string) => void;
+    removeEdge: (id: string) => void;
     updateBlockConfig: (id: string, config: Partial<BlockConfig>) => void;
     setResults: (results: SimulationRunResult[] | null) => void;
     addResultsHistory: (entries: SimulationResultsHistoryEntry | SimulationResultsHistoryEntry[]) => void;
@@ -116,6 +117,11 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
         set({
             nodes: nodes.filter((node) => node.id !== id),
             edges: edges.filter((edge) => edge.source !== id && edge.target !== id),
+        });
+    },
+    removeEdge: (id) => {
+        set({
+            edges: get().edges.filter((edge) => edge.id !== id),
         });
     },
     updateBlockConfig: (id, config) => {
