@@ -257,9 +257,11 @@ export const VendorBehavior: BlockBehavior = {
     initialize(block: Block, ctx: SimulationContext) {
         const config = block.config as VendorConfig;
         if (config.outageProbability > 0) {
-            const failureRatePerMinute = clamp(config.outageProbability / (24 * 60), 0.00001, 1);
-            const timeToFail = -Math.log(ctx.random.next()) / failureRatePerMinute;
-            ctx.schedule('FAILURE_OCCURRED', timeToFail, block.id, undefined, block.id);
+            const failureRatePerMinute = clamp(config.outageProbability / 60, 0, 1);
+            if (failureRatePerMinute > 0) {
+                const timeToFail = -Math.log(ctx.random.next()) / failureRatePerMinute;
+                ctx.schedule('FAILURE_OCCURRED', timeToFail, block.id, undefined, block.id);
+            }
         }
     },
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
@@ -279,9 +281,11 @@ export const VendorBehavior: BlockBehavior = {
             ctx.routeToConnections(block.id, 'dependency_check', 0, { sourceId: block.id, status: 'healthy' });
 
             if (config.outageProbability > 0) {
-                const failureRatePerMinute = clamp(config.outageProbability / (24 * 60), 0.00001, 1);
-                const timeToFail = -Math.log(ctx.random.next()) / failureRatePerMinute;
-                ctx.schedule('FAILURE_OCCURRED', timeToFail, block.id, undefined, block.id);
+                const failureRatePerMinute = clamp(config.outageProbability / 60, 0, 1);
+                if (failureRatePerMinute > 0) {
+                    const timeToFail = -Math.log(ctx.random.next()) / failureRatePerMinute;
+                    ctx.schedule('FAILURE_OCCURRED', timeToFail, block.id, undefined, block.id);
+                }
             }
         }
     }
