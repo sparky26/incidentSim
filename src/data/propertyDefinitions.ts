@@ -2,6 +2,7 @@ export const PROPERTY_DESCRIPTIONS: Record<string, string> = {
     // System
     'baseFailureRate': 'Probability of failure per minute (0.0 - 1.0). e.g., 0.001 means ~0.1% chance failing each minute.',
     'recoveryRate': 'Probability of self-recovery per minute. Lower means it stays down longer without intervention.',
+    'evidenceProfileId': 'Evidence profile that supplies defaults for this block.',
     'type': 'Hard dependencies fail the parent immediately. Soft dependencies degrade performance.',
     'impact': '0-1 factor of how much this dependency affects the parent (1 = full outage).',
     'outageProbability': 'Chance that the vendor API goes down in any given minute.',

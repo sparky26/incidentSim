@@ -23,6 +23,7 @@ export type BlockType =
 
 export interface BaseBlockConfig {
     label: string;
+    evidenceProfileId?: string;
 }
 
 // --- System Blocks ---
