@@ -3,6 +3,7 @@ import { useScenarioStore } from '../../store/scenarioStore';
 import type { BlockConfig } from '../../types/blocks';
 import Tooltip from './Tooltip';
 import { PROPERTY_DESCRIPTIONS } from '../../data/propertyDefinitions';
+import { DEFAULT_EVIDENCE_PROFILE_ID, EVIDENCE_PROFILES, getEvidenceOverrides, getEvidenceProfile } from '../../data/evidenceCatalog';
 
 const Inspector = () => {
     const { nodes, updateBlockConfig, removeBlock } = useScenarioStore();
@@ -21,6 +22,8 @@ const Inspector = () => {
     }
 
     const { id, data, type } = selectedNode;
+    const evidenceProfileId = data.evidenceProfileId ?? DEFAULT_EVIDENCE_PROFILE_ID;
+    const evidenceProfile = getEvidenceProfile(evidenceProfileId);
 
     const handleChange = (key: string, value: any) => {
         // Basic type coercion
@@ -28,6 +31,13 @@ const Inspector = () => {
             value = parseFloat(value);
         }
         updateBlockConfig(id, { [key]: value });
+    };
+
+    const handleEvidenceChange = (profileId: string) => {
+        updateBlockConfig(id, {
+            evidenceProfileId: profileId,
+            ...getEvidenceOverrides(type, profileId),
+        });
     };
 
     return (
@@ -38,8 +48,29 @@ const Inspector = () => {
             </div>
 
             <div className="space-y-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Evidence Profile</label>
+                    <select
+                        value={evidenceProfileId}
+                        onChange={(e) => handleEvidenceChange(e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                    >
+                        {EVIDENCE_PROFILES.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                                {profile.name}
+                            </option>
+                        ))}
+                    </select>
+                    {evidenceProfile && (
+                        <p className="text-xs text-gray-500 mt-1">{evidenceProfile.description}</p>
+                    )}
+                </div>
+
                 {/* Render Form Fields based on data keys */}
                 {Object.entries(data).map(([key, value]) => {
+                    if (key === 'evidenceProfileId') {
+                        return null;
+                    }
                     if (key === 'label') {
                         return (
                             <div key={key}>
@@ -57,9 +88,18 @@ const Inspector = () => {
                     // Skip complex objects/arrays for v1 simple inspector
                     if (typeof value === 'object' && value !== null) return null;
 
+                    const tooltipText = [
+                        PROPERTY_DESCRIPTIONS[key],
+                        evidenceProfile
+                            ? `Sources: ${evidenceProfile.sources.map((source) => source.title).join('; ')}.`
+                            : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' ');
+
                     return (
                         <div key={key}>
-                            <Tooltip text={PROPERTY_DESCRIPTIONS[key] || ''}>
+                            <Tooltip text={tooltipText}>
                                 <label className="block text-xs font-medium text-gray-600 mb-1 capitalize cursor-help border-b border-gray-300 border-dashed inline-block">
                                     {key.replace(/([A-Z])/g, ' $1').trim()}
                                 </label>
