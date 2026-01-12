@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 import SimulationCanvas from './components/canvas/SimulationCanvas';
 import Sidebar from './components/ui/Sidebar';
 import Inspector from './components/ui/Inspector';
+import OnboardingTour from './components/ui/OnboardingTour';
 import { useScenarioStore } from './store/scenarioStore';
 import { SimulationEngine } from './engine/SimulationEngine';
 import { ALL_BEHAVIORS } from './engine/behaviors';
@@ -27,6 +28,14 @@ function App() {
     addResultsHistory
   } = useScenarioStore();
   const [selectedSweepId, setSelectedSweepId] = useState<string>('signal-delay');
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  useEffect(() => {
+    const hasSeenOnboarding = sessionStorage.getItem('rt-onboarding-seen');
+    if (!hasSeenOnboarding) {
+      setIsOnboardingOpen(true);
+    }
+  }, []);
 
   const sweepOptions = useMemo(() => ([
     {
@@ -194,6 +203,11 @@ function App() {
     }, 100);
   }, [addResultsHistory, buildScenario, selectedSweep, setResults, setSimulating, simulationConfig]);
 
+  const handleDismissOnboarding = useCallback(() => {
+    sessionStorage.setItem('rt-onboarding-seen', 'true');
+    setIsOnboardingOpen(false);
+  }, []);
+
   return (
     <div className="w-full h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
       {/* Header */}
@@ -213,6 +227,13 @@ function App() {
             >
               🎓 Start Here: Beginner's Guide
             </a>
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="text-[10px] text-blue-600 hover:text-blue-700 font-semibold"
+            >
+              ▶ Live onboarding tour
+            </button>
             <a
               href="/TUTORIAL.md"
               target="_blank"
@@ -281,6 +302,7 @@ function App() {
 
       {/* Results View */}
       {results && <ResultsPanel />}
+      <OnboardingTour isOpen={isOnboardingOpen} onClose={handleDismissOnboarding} />
     </div>
   );
 }
