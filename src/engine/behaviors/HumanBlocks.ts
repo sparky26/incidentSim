@@ -1,100 +1,146 @@
 import { BlockBehavior, SimulationContext } from '../SimulationEngine';
-import { Block, ResponderConfig } from '../../types/blocks';
+import { Block, ResponderConfig, CommanderConfig, CommChannelConfig } from '../../types/blocks';
 import { SimulationEvent } from '../../types/simulation';
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const findCommanderBonus = (blockId: string, ctx: SimulationContext, severity: number) => {
+    const connections = ctx.connections.filter(c => c.source === blockId || c.target === blockId);
+    const candidateIds = new Set<string>();
+
+    connections.forEach(c => {
+        const otherId = c.source === blockId ? c.target : c.source;
+        candidateIds.add(otherId);
+        const otherBlock = ctx.getBlock(otherId);
+        if (otherBlock?.type === 'CommChannel') {
+            ctx.connections.forEach(inner => {
+                if (inner.source === otherId) candidateIds.add(inner.target);
+                if (inner.target === otherId) candidateIds.add(inner.source);
+            });
+        }
+    });
+
+    for (const id of candidateIds) {
+        const block = ctx.getBlock(id);
+        if (block?.type === 'Commander') {
+            const config = block.config as CommanderConfig;
+            if (severity >= config.activationSeverity) {
+                return config.coordinationBonus;
+            }
+        }
+    }
+
+    return 0;
+};
 
 export const ResponderBehavior: BlockBehavior = {
     initialize(block: Block, ctx: SimulationContext) {
-        ctx.state.get(block.id)!.fatigue = 0;
-        ctx.state.get(block.id)!.timeActive = 0;
-        ctx.state.get(block.id)!.shiftStart = 0; // Or random?
+        const state = ctx.state.get(block.id)!;
+        state.fatigue = 0;
+        state.timeActive = 0;
+        state.shiftStart = 0;
     },
 
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
         const config = block.config as ResponderConfig;
         const state = ctx.state.get(block.id)!;
 
-        // Update timeActive on every event?
-        // Or simulation loop updates it?
-        // Simulation is discrete event. We don't have "tick" unless we schedule it.
-        // We can calc delta from last event?
-        // Let's rely on Events. If 'PAGE_SENT', we check shift duration.
-        // Or we schedule 'SHIFT_END' at init?
-
-        // Strategy: When Responder works (ACKs page), check if shift is over.
-        // Or just schedule SHIFT_CHECK every hour?
-
         if (event.type === 'PAGE_SENT') {
-            // Check Handover
-            const shiftLength = config.shiftLengthHours * 60; // minutes
-            // Approx: timeActive is just "Time since init" for single shift logic?
-            // Real shift: (currentTime - state.shiftStart) > shiftLength
-
-            // For v1 simple: Assume shift started at T=0.
-            const currentShiftTime = (ctx.timestamp - (state.shiftStart || 0)) % (24 * 60); // Reset every day?
-            // Actually, let's just use simple duration check.
+            const shiftLength = config.shiftLengthHours * 60;
             const timeOnShift = ctx.timestamp - (state.shiftStart || 0);
 
             if (timeOnShift > shiftLength) {
-                // Trigger Handover
-                ctx.schedule('HANDOVER_STARTED', 0, block.id, { alertId: event.data?.alertId });
-                return; // Stop processing page here, will resume after handover
+                ctx.schedule('HANDOVER_STARTED', 0, block.id, {
+                    alertId: event.data?.alertId,
+                    incidentId: event.data?.incidentId,
+                    severity: event.data?.severity,
+                    runbookQuality: event.data?.runbookQuality,
+                    runbookOutdated: event.data?.runbookOutdated,
+                    handoverProtocol: event.data?.handoverProtocol
+                }, block.id);
+                return;
             }
 
-            // Normal Page Processing (same as before)
             let responseTime = config.baseResponseTimeMean;
-            if (event.data?.runbookQuality !== undefined) {
-                const multiplier = 1 - (event.data.runbookQuality * 0.5);
-                responseTime *= multiplier;
+            const runbookQuality = event.data?.runbookQuality ?? 0;
+            if (runbookQuality) {
+                const qualityBoost = event.data?.runbookOutdated ? -0.3 : 0.5;
+                responseTime *= 1 - runbookQuality * qualityBoost;
             } else {
                 responseTime *= 1.2;
             }
 
+            const fatigue = state.fatigue || 0;
+            const fatigueMultiplier = 1 + fatigue * config.fatigueSensitivity * 0.15;
+            responseTime *= fatigueMultiplier;
+
+            const severity = event.data?.severity ?? 1;
+            const commanderBonus = findCommanderBonus(block.id, ctx, severity);
+            responseTime *= 1 - commanderBonus * 0.2;
+
+            const contextLossProb = event.data?.contextLossProb ?? 0;
+            if (contextLossProb > 0) {
+                responseTime *= 1 + contextLossProb * 0.5;
+                if (ctx.random.boolean(contextLossProb * 0.15)) {
+                    responseTime += 10;
+                }
+            }
+
             const finalDuration = Math.max(1, responseTime * (0.8 + ctx.random.next() * 0.4));
-            state.fatigue = (state.fatigue || 0) + 1;
+            state.fatigue = fatigue + 1;
+            state.timeActive = (state.timeActive || 0) + finalDuration;
 
             ctx.schedule('PAGE_ACKNOWLEDGED', finalDuration, block.id, {
                 alertId: event.data?.alertId,
-                incidentId: event.data?.incidentId
-            });
+                incidentId: event.data?.incidentId,
+                severity,
+                runbookQuality: event.data?.runbookQuality,
+                runbookOutdated: event.data?.runbookOutdated,
+                runbookAutomated: event.data?.runbookAutomated
+            }, block.id);
         }
         else if (event.type === 'HANDOVER_STARTED') {
-            // Context Loss Penalty
-            // If OnCall protocol is weak -> Add penalty time or chance to drop page?
-            // We need access to OnCall config... but Responder doesn't know which OnCall paged it easily.
-            // Assume default/generic penalty for now or lookup connected OnCall.
-            // Let's assume a "Handover Delay" of 30 mins + Context Loss Risk.
+            const handoverProtocol = event.data?.handoverProtocol ?? 'weak';
+            const baseDuration = handoverProtocol === 'strong' ? 10 : handoverProtocol === 'none' ? 45 : 25;
+            const handoverDuration = baseDuration + ctx.random.next() * 10;
 
-            const handoverDuration = 30; // minutes
             ctx.schedule('HANDOVER_COMPLETED', handoverDuration, block.id, {
-                alertId: event.data?.alertId
-            });
+                alertId: event.data?.alertId,
+                incidentId: event.data?.incidentId,
+                severity: event.data?.severity,
+                runbookQuality: event.data?.runbookQuality,
+                runbookOutdated: event.data?.runbookOutdated,
+                handoverProtocol
+            }, block.id);
 
-            // Reset shift timer
             state.shiftStart = ctx.timestamp + handoverDuration;
-            state.fatigue = 0; // Fresh responder enters
+            state.fatigue = 0;
         }
         else if (event.type === 'HANDOVER_COMPLETED') {
-            // Resume Page
-            // Re-schedule Page Sent? Or just Ack?
-            // If context loss -> Drop?
-            // For v1: Just delays the Ack.
             const alertId = event.data?.alertId;
             if (alertId) {
-                // Re-emit page sent to self to process as new responder
                 ctx.schedule('PAGE_SENT', 0, block.id, {
                     alertId,
-                    incidentId: event.data?.incidentId
-                });
+                    incidentId: event.data?.incidentId,
+                    severity: event.data?.severity,
+                    runbookQuality: event.data?.runbookQuality,
+                    runbookOutdated: event.data?.runbookOutdated,
+                    handoverProtocol: event.data?.handoverProtocol
+                }, block.id);
             }
         }
         else if (event.type === 'PAGE_ACKNOWLEDGED') {
             const connectedActions = ctx.getConnections(block.id);
             if (connectedActions.length > 0) {
                 const actionId = connectedActions[Math.floor(ctx.random.next() * connectedActions.length)];
-                ctx.schedule('ACTION_STARTED', 1, actionId, {
+                ctx.routeEvent(actionId, 'ACTION_STARTED', 1, {
                     responderId: block.id,
-                    incidentId: event.data?.incidentId
-                });
+                    incidentId: event.data?.incidentId,
+                    severity: event.data?.severity,
+                    runbookQuality: event.data?.runbookQuality,
+                    runbookOutdated: event.data?.runbookOutdated,
+                    runbookAutomated: event.data?.runbookAutomated
+                }, block.id);
             }
         }
     }
@@ -103,21 +149,37 @@ export const ResponderBehavior: BlockBehavior = {
 export const CommanderBehavior: BlockBehavior = {
     initialize(block: Block, ctx: SimulationContext) { },
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
-        // Passive bonus provider in v1?
-        // Or actively triggers coordination events?
-        // "Activation rule"
-        // For v1, existence of Commander block might just queryable by others?
-        // Or Commander intercepts 'PAGE_ACKNOWLEDGED' and directs traffic.
+        if (event.type === 'ALERT_FIRED') {
+            const config = block.config as CommanderConfig;
+            const severity = event.data?.severity ?? 1;
+            if (severity >= config.activationSeverity) {
+                ctx.state.get(block.id)!.status = 'active';
+            }
+        }
     }
 };
 
 export const CommChannelBehavior: BlockBehavior = {
     initialize(block: Block, ctx: SimulationContext) { },
     processEvent(event: SimulationEvent, block: Block, ctx: SimulationContext) {
-        // Adds latency to messages passing through
-        // Implementation: If Blocks are linked via CommChannel?
-        // A -> Comm -> B.
-        // In v1, usually A -> B directly.
-        // Maybe this is an "Global Environment" block?
+        const config = block.config as CommChannelConfig;
+        if (event.type === 'COMM_MESSAGE') {
+            const forwardedType = event.data?.forwardedType as SimulationEvent['type'];
+            const forwardedData = event.data?.forwardedData ?? {};
+            const combinedContextLoss = clamp(
+                1 - (1 - (forwardedData.contextLossProb ?? 0)) * (1 - config.contextLossProb),
+                0,
+                1
+            );
+
+            const shouldDrop = ctx.random.boolean(combinedContextLoss * 0.1);
+            if (shouldDrop) return;
+
+            const latency = config.latency * (0.8 + 0.4 * ctx.random.next());
+            ctx.routeToConnections(block.id, forwardedType, latency, {
+                ...forwardedData,
+                contextLossProb: combinedContextLoss
+            });
+        }
     }
 };

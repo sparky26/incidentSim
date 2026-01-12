@@ -23,7 +23,9 @@ export type EventType =
     | 'INCIDENT_STARTED'
     | 'INCIDENT_RESOLVED'
     | 'SERVICE_HEALTH_CHECK'
-    | 'RECOVERY_CHECK';
+    | 'RECOVERY_CHECK'
+    | 'COMM_MESSAGE'
+    | 'LOAD_UPDATE';
 
 export interface SimulationEvent {
     id: string;
@@ -43,6 +45,9 @@ export interface EntityState {
     load?: number; // For services
     activeIncidents?: string[]; // AlertRule
     activeIncidentId?: string; // Service tracking
+    dependencyStatus?: 'healthy' | 'degraded' | 'down';
+    signalHistory?: number[];
+    activeEscalations?: Record<string, { acked: boolean; lastStep: number }>;
 
     // Human
     timeActive?: number;
