@@ -148,6 +148,7 @@ Each block type has a behavior that reacts to simulation events.
 - Simulation events, run results, and configs are defined in `src/types/simulation.ts`.
 - Connection rules between block types live in `src/utils/connectionRules.ts`.
 - Example scenarios are stored in `src/data/templates.ts`.
+<img width="1917" height="911" alt="r1" src="https://github.com/user-attachments/assets/c7f96a89-d4e0-407c-8187-0cb32567440a" />
 
 ## Project structure
 
